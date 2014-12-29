@@ -22,13 +22,18 @@
   ==============================================================================
 */
 
-class OpenGLContext::CachedImage  : public CachedComponentImage,
-                                    public Thread
+class OpenGLContext::CachedImage  : public CachedComponentImage
+                                 #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
+                                  , public Thread
+                                 #endif
 {
 public:
     CachedImage (OpenGLContext& c, Component& comp,
                  const OpenGLPixelFormat& pixFormat, void* contextToShare)
-        : Thread ("OpenGL Rendering"),
+        :
+         #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
+          Thread ("OpenGL Rendering"),
+         #endif
           context (c), component (comp),
           scale (1.0),
          #if JUCE_OPENGL3
@@ -58,7 +63,7 @@ public:
 
     void start()
     {
-       #if ! JUCE_ANDROID
+       #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
         if (nativeContext != nullptr)
             startThread (6);
        #endif
@@ -66,7 +71,7 @@ public:
 
     void stop()
     {
-       #if ! JUCE_ANDROID
+       #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
         stopThread (10000);
        #endif
         hasInitialised = false;
@@ -95,11 +100,11 @@ public:
     {
         needsUpdate = 1;
 
-       #if JUCE_ANDROID
+       #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
+        notify();
+       #else
         if (nativeContext != nullptr)
             nativeContext->triggerRepaint();
-       #else
-        notify();
        #endif
     }
 
@@ -151,9 +156,20 @@ public:
         {
             // This avoids hogging the message thread when doing intensive rendering.
             if (lastMMLockReleaseTime + 1 >= Time::getMillisecondCounter())
-                wait (2);
+            {
+                const int sleepMs = 2;
+               #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
+                wait (sleepMs);
+               #else
+                Thread::sleep (sleepMs);
+               #endif
+            }
 
+           #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
             mmLock = new MessageManagerLock (this);  // need to acquire this before locking the context.
+           #else
+            mmLock = new MessageManagerLock (Thread::getCurrentThread());
+           #endif
             if (! mmLock->lockWasGained())
                 return false;
 
@@ -331,6 +347,7 @@ public:
     }
 
     //==============================================================================
+   #if JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
     void run() override
     {
         {
@@ -364,6 +381,7 @@ public:
 
         shutdownOnThread();
     }
+   #endif
 
     void initialiseOnThread()
     {
@@ -445,7 +463,7 @@ public:
 };
 
 //==============================================================================
-#if JUCE_ANDROID
+#if ! JUCE_OPENGL_CREATE_JUCE_RENDER_THREAD
 void OpenGLContext::NativeContext::contextCreatedCallback()
 {
     isInsideGLCallback = true;
