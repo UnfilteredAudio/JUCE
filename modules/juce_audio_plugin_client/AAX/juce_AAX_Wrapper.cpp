@@ -93,6 +93,14 @@ using juce::Component;
 
 const int32_t juceChunkType = 'juce';
 
+//UA
+enum EDemoGain_MeterTaps
+{
+	eMeterTap_Reduction = 0,
+	eMeterTap_Count
+};
+const AAX_CTypeID cDemoGain_MeterID [1] = {'mtrR'};
+
 //==============================================================================
 struct AAXClasses
 {
@@ -225,6 +233,8 @@ struct AAXClasses
 
         PluginInstanceInfo* pluginInstance;
         int32_t* isPrepared;
+		
+		float* const * mMetersPP;// Meter taps
     };
 
     struct JUCEAlgorithmIDs
@@ -250,6 +260,8 @@ struct AAXClasses
 
             pluginInstance  = AAX_FIELD_INDEX (JUCEAlgorithmContext, pluginInstance),
             preparedFlag    = AAX_FIELD_INDEX (JUCEAlgorithmContext, isPrepared)
+			
+			,eAlgFieldID_Meters = AAX_FIELD_INDEX (JUCEAlgorithmContext, mMetersPP)
         };
     };
 
@@ -1067,6 +1079,11 @@ struct AAXClasses
             i.pluginInstance->parameters.process (i.inputChannels, i.outputChannels,
                                                   *(i.bufferSize), *(i.bypass) != 0,
                                                   getMidiNodeIn(i), getMidiNodeOut(i));
+			
+			// Meter taps
+			float* const AAX_RESTRICT	meterTaps	= *i.mMetersPP;
+			i.pluginInstance->parameters.getPluginInstance().processAAX_Meters(meterTaps, *(i.bufferSize));
+			
         }
     }
 
@@ -1094,6 +1111,9 @@ struct AAXClasses
        #endif
 
         check (desc.AddPrivateData (JUCEAlgorithmIDs::pluginInstance, sizeof (PluginInstanceInfo)));
+		
+		//UA
+		desc.AddMeters ( JUCEAlgorithmIDs::eAlgFieldID_Meters, cDemoGain_MeterID, eMeterTap_Count );
 
         // Create a property map
         AAX_IPropertyMap* const properties = desc.NewPropertyMap();
@@ -1158,6 +1178,17 @@ struct AAXClasses
         // You need to actually add some configurations to the JucePlugin_PreferredChannelConfigurations
         // value in your JucePluginCharacteristics.h file..
         jassert (numConfigs > 0);
+		
+		
+		//UA
+		// Effect's meter display properties
+		//
+		AAX_IPropertyMap* meterProperties = descriptor.NewPropertyMap();
+		//
+		meterProperties->AddProperty ( AAX_eProperty_Meter_Type, AAX_eMeterType_EGGain );
+		meterProperties->AddProperty ( AAX_eProperty_Meter_Orientation, AAX_eMeterOrientation_TopRight );
+		descriptor.AddMeterDescription( cDemoGain_MeterID[0], "Reduction", meterProperties );
+
 
         for (int i = 0; i < numConfigs; ++i)
         {

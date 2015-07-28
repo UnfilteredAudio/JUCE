@@ -770,6 +770,17 @@ public:
 
     /** @internal */
     static void JUCE_CALLTYPE setTypeOfNextNewPlugin (WrapperType);
+	
+#ifdef _MSC_VER
+#	define AAX_RESTRICT
+#elif defined(_TMS320C6X) // TI
+#	define AAX_RESTRICT	restrict
+#elif defined (__GNUC__)// Mac
+#   define AAX_RESTRICT	__restrict__
+#endif // _MSC_VER
+	
+	virtual void processAAX_Meters(float* const AAX_RESTRICT meterTaps, const int bufferSize);
+
 
 protected:
     /** @internal */

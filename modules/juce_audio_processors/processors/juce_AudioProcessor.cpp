@@ -449,6 +449,8 @@ XmlElement* AudioProcessor::getXmlFromBinary (const void* data, const int sizeIn
     return nullptr;
 }
 
+void AudioProcessor::processAAX_Meters(float* const AAX_RESTRICT meterTaps, const int bufferSize) {}
+
 //==============================================================================
 void AudioProcessorListener::audioProcessorParameterChangeGestureBegin (AudioProcessor*, int) {}
 void AudioProcessorListener::audioProcessorParameterChangeGestureEnd   (AudioProcessor*, int) {}
