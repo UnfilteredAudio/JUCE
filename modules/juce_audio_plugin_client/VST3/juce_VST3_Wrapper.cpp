@@ -69,6 +69,63 @@ using namespace Steinberg;
 #endif
 
 //==============================================================================
+struct BypassParam  : public Vst::Parameter
+{
+    BypassParam (int index)
+    {
+        info.id = (Vst::ParamID) index;
+        toString128 (info.title, "Master Bypass");
+        toString128 (info.shortTitle, "MstByp");
+        toString128 (info.units, "");
+        info.stepCount = (Steinberg::int32) 1;
+        info.defaultNormalizedValue = 0.0f;
+        info.unitId = Vst::kRootUnitId;
+        info.flags = Vst::ParameterInfo::kCanAutomate | Vst::ParameterInfo::kIsBypass;
+    }
+    
+    virtual ~BypassParam() {}
+    
+    bool setNormalized (Vst::ParamValue v) override
+    {
+        v = jlimit (0.0, 1.0, v);
+        
+        if (v != valueNormalized)
+        {
+            valueNormalized = v;
+            changed();
+            return true;
+        }
+        
+        return false;
+    }
+    
+    void toString (Vst::ParamValue value, Vst::String128 result) const override
+    {
+        toString128 (result, valueNormalized >= 0.5f ? "Bypass" : "In");
+    }
+    
+    bool fromString (const Vst::TChar* text, Vst::ParamValue& outValueNormalized) const override
+    {
+        outValueNormalized = getStringFromVstTChars(text).startsWith ("B") ? 1.0f : 0.0f;
+        return true;
+    }
+    
+    static String getStringFromVstTChars (const Vst::TChar* text)
+    {
+        return juce::String (juce::CharPointer_UTF16 (reinterpret_cast<const juce::CharPointer_UTF16::CharType*> (text)));
+    }
+    
+    Vst::ParamValue toPlain (Vst::ParamValue v) const override       { return v; }
+    Vst::ParamValue toNormalized (Vst::ParamValue v) const override  { return v; }
+    
+private:
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BypassParam)
+};
+
+//==============================================================================
+
+//==============================================================================
 class JuceAudioProcessor  : public FUnknown
 {
 public:
@@ -335,8 +392,13 @@ private:
             pluginInstance->addListener (this);
 
             if (parameters.getParameterCount() <= 0)
+            {
                 for (int i = 0; i < pluginInstance->getNumParameters(); ++i)
+                {
                     parameters.addParameter (new Param (*pluginInstance, i));
+                }
+                parameters.addParameter(new BypassParam(pluginInstance->getNumParameters()));
+            }
 
             audioProcessorChanged (pluginInstance);
         }
@@ -588,6 +650,7 @@ class JuceVST3Component : public Vst::IComponent,
 public:
     JuceVST3Component (Vst::IHostApplication* h)
       : refCount (1),
+        bypass (false),
         host (h),
         audioInputs  (Vst::kAudio, Vst::kInput),
         audioOutputs (Vst::kAudio, Vst::kOutput),
@@ -1266,8 +1329,15 @@ public:
                 if (paramQueue->getPoint (numPoints - 1,  offsetSamples, value) == kResultTrue)
                 {
                     const int id = (int) paramQueue->getParameterId();
-                    jassert (isPositiveAndBelow (id, pluginInstance->getNumParameters()));
-                    pluginInstance->setParameter (id, (float) value);
+                    if (id == pluginInstance->getNumParameters())
+                    {
+                        bypass = value >= 0.5;
+                    }
+                    else
+                    {
+                        jassert (isPositiveAndBelow (id, pluginInstance->getNumParameters()));
+                        pluginInstance->setParameter (id, (float) value);
+                    }
                 }
             }
         }
@@ -1344,6 +1414,8 @@ public:
 
             if (pluginInstance->isSuspended())
                 buffer.clear();
+            else if (bypass)
+                pluginInstance->processBlockBypassed (buffer, midiBuffer);
             else
                 pluginInstance->processBlock (buffer, midiBuffer);
         }
@@ -1384,6 +1456,8 @@ public:
 private:
     //==============================================================================
     Atomic<int> refCount;
+
+    bool bypass;
 
     AudioProcessor* pluginInstance;
     ComSmartPtr<Vst::IHostApplication> host;

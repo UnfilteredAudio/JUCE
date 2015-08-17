@@ -72,6 +72,9 @@
   #error "You need to define the JucePlugin_AAXLibs_path macro. (This is best done via the introjucer)"
  #endif
 
+    #include "../utility/juce_FakeMouseMoveGenerator.h"
+    #include "../utility/juce_WindowsHooks.h"
+
  #if JUCE_64BIT
   #define JUCE_AAX_LIB "AAXLibrary_x64"
  #else
@@ -438,6 +441,11 @@ struct AAXClasses
 
             ScopedPointer<AudioProcessorEditor> pluginEditor;
             JuceAAX_GUI& owner;
+
+           #if JUCE_WINDOWS
+            FakeMouseMoveGenerator fakeMouseGenerator;
+            WindowsHooks hooks;
+           #endif
 
             JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ContentWrapperComponent)
         };
@@ -1164,6 +1172,7 @@ struct AAXClasses
     {
         descriptor.AddName (JucePlugin_Desc);
         descriptor.AddName (JucePlugin_Name);
+        descriptor.AddName (PLUGINNAME);
         descriptor.AddCategory (JucePlugin_AAXCategory);
 
        #ifdef JucePlugin_AAXPageTableFile
