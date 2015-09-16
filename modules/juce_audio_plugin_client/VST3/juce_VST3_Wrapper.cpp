@@ -69,63 +69,6 @@ using namespace Steinberg;
 #endif
 
 //==============================================================================
-struct BypassParam  : public Vst::Parameter
-{
-    BypassParam (int index)
-    {
-        info.id = (Vst::ParamID) index;
-        toString128 (info.title, "Master Bypass");
-        toString128 (info.shortTitle, "MstByp");
-        toString128 (info.units, "");
-        info.stepCount = (Steinberg::int32) 1;
-        info.defaultNormalizedValue = 0.0f;
-        info.unitId = Vst::kRootUnitId;
-        info.flags = Vst::ParameterInfo::kCanAutomate | Vst::ParameterInfo::kIsBypass;
-    }
-    
-    virtual ~BypassParam() {}
-    
-    bool setNormalized (Vst::ParamValue v) override
-    {
-        v = jlimit (0.0, 1.0, v);
-        
-        if (v != valueNormalized)
-        {
-            valueNormalized = v;
-            changed();
-            return true;
-        }
-        
-        return false;
-    }
-    
-    void toString (Vst::ParamValue value, Vst::String128 result) const override
-    {
-        toString128 (result, valueNormalized >= 0.5f ? "Bypass" : "In");
-    }
-    
-    bool fromString (const Vst::TChar* text, Vst::ParamValue& outValueNormalized) const override
-    {
-        outValueNormalized = getStringFromVstTChars(text).startsWith ("B") ? 1.0f : 0.0f;
-        return true;
-    }
-    
-    static String getStringFromVstTChars (const Vst::TChar* text)
-    {
-        return juce::String (juce::CharPointer_UTF16 (reinterpret_cast<const juce::CharPointer_UTF16::CharType*> (text)));
-    }
-    
-    Vst::ParamValue toPlain (Vst::ParamValue v) const override       { return v; }
-    Vst::ParamValue toNormalized (Vst::ParamValue v) const override  { return v; }
-    
-private:
-    
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BypassParam)
-};
-
-//==============================================================================
-
-//==============================================================================
 class JuceAudioProcessor  : public FUnknown
 {
 public:
@@ -328,13 +271,32 @@ public:
     }
 
     //==============================================================================
-    tresult PLUGIN_API getMidiControllerAssignment (Steinberg::int32, Steinberg::int16,
-                                                    Vst::CtrlNumber,
-                                                    Vst::ParamID& id) override
+    tresult PLUGIN_API getMidiControllerAssignment (Steinberg::int32 /*busIndex*/, Steinberg::int16 channel,
+                                                    Vst::CtrlNumber midiControllerNumber, Vst::ParamID& resultID) override
     {
-        //TODO
-        id = 0;
-        return kNotImplemented;
+        resultID = midiControllerToParameter[channel][midiControllerNumber];
+
+        return kResultTrue; // Returning false makes some hosts stop asking for further MIDI Controller Assignments
+    }
+
+    // Converts an incoming parameter index to a MIDI controller:
+    bool getMidiControllerForParameter (int index, int& channel, int& ctrlNumber)
+    {
+        const int mappedIndex = index - parameterToMidiControllerOffset;
+
+        if (isPositiveAndBelow (mappedIndex, numElementsInArray (parameterToMidiController)))
+        {
+            const MidiController& mc = parameterToMidiController[mappedIndex];
+
+            if (mc.channel != -1 && mc.ctrlNumber != -1)
+            {
+                channel    = jlimit (1, 16, mc.channel + 1);
+                ctrlNumber = mc.ctrlNumber;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     //==============================================================================
@@ -384,6 +346,18 @@ private:
     ComSmartPtr<JuceAudioProcessor> audioProcessor;
     ScopedJuceInitialiser_GUI libraryInitialiser;
 
+    struct MidiController
+    {
+        MidiController() noexcept  : channel (-1), ctrlNumber (-1) {}
+
+        int channel, ctrlNumber;
+    };
+
+    enum { numMIDIChannels = 16 };
+    int parameterToMidiControllerOffset;
+    MidiController parameterToMidiController[numMIDIChannels * Vst::kCountCtrlNumber];
+    int midiControllerToParameter[numMIDIChannels][Vst::kCountCtrlNumber];
+
     //==============================================================================
     void setupParameters()
     {
@@ -392,15 +366,30 @@ private:
             pluginInstance->addListener (this);
 
             if (parameters.getParameterCount() <= 0)
-            {
                 for (int i = 0; i < pluginInstance->getNumParameters(); ++i)
-                {
                     parameters.addParameter (new Param (*pluginInstance, i));
-                }
-                parameters.addParameter(new BypassParam(pluginInstance->getNumParameters()));
-            }
 
+            initialiseMidiControllerMappings (pluginInstance->getNumParameters());
             audioProcessorChanged (pluginInstance);
+        }
+    }
+
+    void initialiseMidiControllerMappings (const int numParameters)
+    {
+        parameterToMidiControllerOffset = numParameters;
+
+        for (int c = 0, p = 0; c < numMIDIChannels; ++c)
+        {
+            for (int i = 0; i < Vst::kCountCtrlNumber; ++i, ++p)
+            {
+                midiControllerToParameter[c][i] = p + parameterToMidiControllerOffset;
+                parameterToMidiController[p].channel = c;
+                parameterToMidiController[p].ctrlNumber = i;
+
+                parameters.addParameter (new Vst::Parameter (toString ("MIDI CC " + String (c) + "|" + String (i)),
+                                         p + parameterToMidiControllerOffset, 0, 0, 0,
+                                         Vst::ParameterInfo::kCanAutomate, Vst::kRootUnitId));
+            }
         }
     }
 
@@ -650,7 +639,6 @@ class JuceVST3Component : public Vst::IComponent,
 public:
     JuceVST3Component (Vst::IHostApplication* h)
       : refCount (1),
-        bypass (false),
         host (h),
         audioInputs  (Vst::kAudio, Vst::kInput),
         audioOutputs (Vst::kAudio, Vst::kOutput),
@@ -1166,7 +1154,7 @@ public:
     bool getCurrentPosition (CurrentPositionInfo& info) override
     {
         info.timeInSamples              = jmax ((juce::int64) 0, processContext.projectTimeSamples);
-        info.timeInSeconds              = processContext.projectTimeMusic;
+        info.timeInSeconds              = processContext.systemTime / 1000000000.0;
         info.bpm                        = jmax (1.0, processContext.tempo);
         info.timeSigNumerator           = jmax (1, (int) processContext.timeSigNumerator);
         info.timeSigDenominator         = jmax (1, (int) processContext.timeSigDenominator);
@@ -1329,17 +1317,33 @@ public:
                 if (paramQueue->getPoint (numPoints - 1,  offsetSamples, value) == kResultTrue)
                 {
                     const int id = (int) paramQueue->getParameterId();
-                    if (id == pluginInstance->getNumParameters())
-                    {
-                        bypass = value >= 0.5;
-                    }
-                    else
-                    {
-                        jassert (isPositiveAndBelow (id, pluginInstance->getNumParameters()));
+
+                    if (isPositiveAndBelow (id, pluginInstance->getNumParameters()))
                         pluginInstance->setParameter (id, (float) value);
-                    }
+                    else
+                        addParameterChangeToMidiBuffer (offsetSamples, id, value);
                 }
             }
+        }
+    }
+
+    void addParameterChangeToMidiBuffer (const Steinberg::int32 offsetSamples, const int id, const double value)
+    {
+        // If the parameter is mapped to a MIDI CC message then insert it into the midiBuffer.
+        int channel, ctrlNumber;
+
+        if (juceVST3EditController->getMidiControllerForParameter (id, channel, ctrlNumber))
+        {
+            if (ctrlNumber == Vst::kAfterTouch)
+                midiBuffer.addEvent (MidiMessage::channelPressureChange (channel,
+                                                                         jlimit (0, 127, (int) (value * 128.0))), offsetSamples);
+            else if (ctrlNumber == Vst::kPitchBend)
+                midiBuffer.addEvent (MidiMessage::pitchWheel (channel,
+                                                              jlimit (0, 0x3fff, (int) (value * 0x4000))), offsetSamples);
+            else
+                midiBuffer.addEvent (MidiMessage::controllerEvent (channel,
+                                                                   jlimit (0, 127, ctrlNumber),
+                                                                   jlimit (0, 127, (int) (value * 128.0))), offsetSamples);
         }
     }
 
@@ -1414,8 +1418,6 @@ public:
 
             if (pluginInstance->isSuspended())
                 buffer.clear();
-            else if (bypass)
-                pluginInstance->processBlockBypassed (buffer, midiBuffer);
             else
                 pluginInstance->processBlock (buffer, midiBuffer);
         }
@@ -1457,8 +1459,6 @@ private:
     //==============================================================================
     Atomic<int> refCount;
 
-    bool bypass;
-
     AudioProcessor* pluginInstance;
     ComSmartPtr<Vst::IHostApplication> host;
     ComSmartPtr<JuceAudioProcessor> comPluginInstance;
@@ -1490,7 +1490,7 @@ private:
 
     void addEventBusTo (Vst::BusList& busList, const juce::String& name)
     {
-        addBusTo (busList, new Vst::EventBus (toString (name), 16, Vst::kMain, Vst::BusInfo::kDefaultActive));
+        addBusTo (busList, new Vst::EventBus (toString (name), Vst::kMain, Vst::BusInfo::kDefaultActive, 16));
     }
 
     Vst::BusList* getBusListFor (Vst::MediaType type, Vst::BusDirection dir)
@@ -1546,7 +1546,7 @@ private:
  #pragma warning (disable: 4310)
 #elif JUCE_CLANG
  #pragma clang diagnostic push
- #pragma clang diagnostic ignored "-w"
+ #pragma clang diagnostic ignored "-Wall"
 #endif
 
 DECLARE_CLASS_IID (JuceAudioProcessor, 0x0101ABAB, 0xABCDEF01, JucePlugin_ManufacturerCode, JucePlugin_PluginCode)

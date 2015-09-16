@@ -181,7 +181,8 @@ public:
         Item addNewSubGroup (const String& name, int insertIndex);
         Item getOrCreateSubGroup (const String& name);
         void addChild (const Item& newChild, int insertIndex);
-        bool addFile (const File& file, int insertIndex, bool shouldCompile);
+        bool addFileAtIndex (const File& file, int insertIndex, bool shouldCompile);
+        bool addFileRetainingSortOrder (const File& file, bool shouldCompile);
         void addFileUnchecked (const File& file, int insertIndex, bool shouldCompile);
         bool addRelativeFile (const RelativePath& file, int insertIndex, bool shouldCompile);
         void removeItemFromProject();
@@ -272,6 +273,7 @@ private:
     friend class Item;
     ValueTree projectRoot;
     ScopedPointer<EnabledModuleList> enabledModulesList;
+    bool isSaving;
 
     void updateProjectSettings();
     void sanitiseConfigFlags();

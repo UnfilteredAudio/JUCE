@@ -20,6 +20,7 @@ xcuserdata
 *.xccheckout
 contents.xcworkspacedata
 .DS_Store
+Thumbs.db
 .svn
 profile
 **/MacOSX/build
@@ -35,6 +36,10 @@ profile
 **/VisualStudio2012/Release
 **/VisualStudio2013/Debug
 **/VisualStudio2013/Release
+**/VisualStudio2013/x64
+**/VisualStudio2015/Debug
+**/VisualStudio2015/Release
+**/VisualStudio2015/x64
 **/Android/bin
 **/Android/libs
 **/Android/gen
@@ -43,3 +48,4 @@ profile
 **/CodeBlocks/obj
 **/CodeBlocks/*.depend
 **/CodeBlocks/*.layout
+doxygen/doc

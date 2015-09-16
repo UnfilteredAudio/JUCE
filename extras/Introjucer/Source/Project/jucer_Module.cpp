@@ -314,7 +314,11 @@ void LibraryModule::createLocalHeaderWrapper (ProjectSaver& projectSaver, const 
         const RelativePath fileFromHere (headerFromProject.rebased (project.getProjectFolder(),
                                                                     localHeader.getParentDirectory(), RelativePath::unknown));
 
-        paths.add (fileFromHere.toUnixStyle().quoted());
+        if (exporter->isWindows())
+            paths.add (fileFromHere.toWindowsStyle().quoted());
+        else
+            paths.add (fileFromHere.toUnixStyle().quoted());
+
         guards.add ("defined (" + exporter->getExporterIdentifierMacro() + ")");
     }
 
@@ -601,9 +605,9 @@ void LibraryModule::addBrowseableCode (ProjectExporter& exporter, const Array<Fi
                                pathWithinModule);
     }
 
-    sourceGroup.addFile (localModuleFolder.getChildFile (FileHelpers::getRelativePathFrom (moduleInfo.manifestFile,
-                                                                                           moduleInfo.getFolder())), -1, false);
-    sourceGroup.addFile (getModuleHeaderFile (localModuleFolder), -1, false);
+    sourceGroup.addFileAtIndex (localModuleFolder.getChildFile (FileHelpers::getRelativePathFrom (moduleInfo.manifestFile,
+                                                                                                  moduleInfo.getFolder())), -1, false);
+    sourceGroup.addFileAtIndex (getModuleHeaderFile (localModuleFolder), -1, false);
 
     exporter.getModulesGroup().state.addChild (sourceGroup.state.createCopy(), -1, nullptr);
 }
@@ -728,7 +732,7 @@ void EnabledModuleList::addModule (const File& moduleManifestFile, bool copyLoca
 
         if (! isModuleEnabled (moduleID))
         {
-            ValueTree module (Ids::MODULES);
+            ValueTree module (Ids::MODULE);
             module.setProperty (Ids::ID, moduleID, nullptr);
 
             state.addChild (module, -1, getUndoManager());
