@@ -509,7 +509,7 @@ private:
             return kResultFalse;
         }
 
-        tresult PLUGIN_API canResize() override         { return kResultTrue; }
+        tresult PLUGIN_API canResize() override         { return kResultFalse; }
 
         tresult PLUGIN_API checkSizeConstraint (ViewRect* rectToCheck) override
         {
