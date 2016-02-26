@@ -74,9 +74,6 @@
   #error "You need to define the JucePlugin_AAXLibs_path macro. (This is best done via the introjucer)"
  #endif
 
-    #include "../utility/juce_FakeMouseMoveGenerator.h"
-    #include "../utility/juce_WindowsHooks.h"
-
  #if JUCE_64BIT
   #define JUCE_AAX_LIB "AAXLibrary_x64"
  #else
@@ -495,7 +492,6 @@ struct AAXClasses
             JuceAAX_GUI& owner;
 
            #if JUCE_WINDOWS
-            FakeMouseMoveGenerator fakeMouseGenerator;
             WindowsHooks hooks;
            #endif
 
@@ -1242,15 +1238,6 @@ struct AAXClasses
         for (JUCEAlgorithmContext* const* iter = instancesBegin; iter < instancesEnd; ++iter)
         {
             const JUCEAlgorithmContext& i = **iter;
-			
-#if JucePlugin_AcceptsSideChain
-			int32_t sideChainChannel = *i.sideChain;
-			if(sideChainChannel){
-				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, true);
-			} else {
-				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, false);
-			}
-#endif
 
             int sideChainBufferIdx = i.pluginInstance->parameters.supportsSidechain() && i.sideChainBuffers != nullptr
                                          ? static_cast<int> (*i.sideChainBuffers)
