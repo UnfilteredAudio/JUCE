@@ -22,10 +22,7 @@
   ==============================================================================
 */
 
-// Your project must contain an AppConfig.h file with your project-specific settings in it,
-// and your header search path must make it accessible to the module's files.
-#include "AppConfig.h"
-
+#include "../../juce_core/system/juce_TargetPlatform.h"
 #include "../utility/juce_CheckSettingMacros.h"
 
 #if JucePlugin_Build_RTAS
@@ -122,7 +119,6 @@
  #pragma comment(lib, PT_LIB_PATH "RTASClientLib.lib")
 #endif
 
-#undef Component
 #undef MemoryBlock
 
 //==============================================================================
@@ -133,8 +129,8 @@
   extern void JUCE_CALLTYPE passFocusToHostWindow (void* hostWindow);
  #endif
 #else
-  extern void* attachSubWindow (void* hostWindowRef, juce::Component* comp);
-  extern void removeSubWindow (void* nsWindow, juce::Component* comp);
+  extern void* attachSubWindow (void* hostWindowRef, Component* comp);
+  extern void removeSubWindow (void* nsWindow, Component* comp);
   extern void forwardCurrentKeyEventToHostWindow();
 #endif
 
@@ -240,7 +236,7 @@ public:
 
         void timerCallback() override
         {
-            if (! juce::Component::isMouseButtonDownAnywhere())
+            if (! Component::isMouseButtonDownAnywhere())
             {
                 stopTimer();
 
@@ -290,7 +286,7 @@ public:
     private:
         AudioProcessor* const filter;
         JucePlugInProcess* const process;
-        ScopedPointer<juce::Component> wrapper;
+        ScopedPointer<Component> wrapper;
         ScopedPointer<AudioProcessorEditor> editorComp;
 
         void deleteEditorComp()
@@ -301,7 +297,7 @@ public:
                 {
                     PopupMenu::dismissAllActiveMenus();
 
-                    if (juce::Component* const modalComponent = juce::Component::getCurrentlyModalComponent())
+                    if (Component* const modalComponent = Component::getCurrentlyModalComponent())
                         modalComponent->exitModalState (0);
 
                     filter->editorBeingDeleted (editorComp);
@@ -315,7 +311,7 @@ public:
         //==============================================================================
         // A component to hold the AudioProcessorEditor, and cope with some housekeeping
         // chores when it changes or repaints.
-        class EditorCompWrapper  : public juce::Component
+        class EditorCompWrapper  : public Component
                                  #if ! JUCE_MAC
                                    , public FocusChangeListener
                                  #endif
@@ -368,7 +364,7 @@ public:
 
             void resized() override
             {
-                if (juce::Component* const ed = getEditor())
+                if (Component* const ed = getEditor())
                     ed->setBounds (getLocalBounds());
 
                 repaint();
@@ -384,7 +380,7 @@ public:
             }
            #endif
 
-            void childBoundsChanged (juce::Component* child) override
+            void childBoundsChanged (Component* child) override
             {
                 setSize (child->getWidth(), child->getHeight());
                 child->setTopLeftPosition (0, 0);
@@ -413,7 +409,7 @@ public:
             JuceCustomUIView* const owner;
             int titleW, titleH;
 
-            juce::Component* getEditor() const        { return getChildComponent (0); }
+            Component* getEditor() const        { return getChildComponent (0); }
 
             JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EditorCompWrapper)
         };
@@ -421,7 +417,7 @@ public:
 
     JuceCustomUIView* getView() const
     {
-        return dynamic_cast <JuceCustomUIView*> (fOurPlugInView);
+        return dynamic_cast<JuceCustomUIView*> (fOurPlugInView);
     }
 
     void GetViewRect (Rect* size) override
@@ -465,20 +461,7 @@ public:
         SFicPlugInStemFormats stems;
         GetProcessType()->GetStemFormats (&stems);
 
-        Array<int> numChannelsPerInputElement;
-        numChannelsPerInputElement.add(fNumInputs);
-       #if JucePlugin_AcceptsSideChain
-        numChannelsPerInputElement.add(1);
-       #endif
-        
-        Array<int> numChannelsPerOutputElement;
-        numChannelsPerOutputElement.add(fNumOutputs);
-
-        juceFilter->setPlayConfigDetails (numChannelsPerInputElement, numChannelsPerOutputElement, sampleRate, maxBlockSize);
-        juceFilter->setInputElementActive(0, true);
-       #if JucePlugin_AcceptsSideChain
-        juceFilter->setInputElementActive(1, false);
-       #endif
+        juceFilter->setPlayConfigDetails (fNumInputs, fNumOutputs, sampleRate, maxBlockSize);
 
         AddControl (new CPluginControl_OnOff ('bypa', "Master Bypass\nMastrByp\nMByp\nByp", false, true));
         DefineMasterBypassControlIndex (bypassControlIndex);
@@ -491,11 +474,11 @@ public:
         if (MIDILogIn() == noErr)
         {
            #if JucePlugin_WantsMidiInput
-            if (CEffectType* const type = dynamic_cast <CEffectType*> (this->GetProcessType()))
+            if (CEffectType* const type = dynamic_cast<CEffectType*> (this->GetProcessType()))
             {
                 char nodeName [64];
                 type->GetProcessTypeName (63, nodeName);
-                p2cstrcpy (nodeName, reinterpret_cast <unsigned char*> (nodeName));
+                p2cstrcpy (nodeName, reinterpret_cast<unsigned char*> (nodeName));
 
                 midiBufferNode = new CEffectMIDIOtherBufferedNode (&mMIDIWorld,
                                                                    8192,
@@ -511,8 +494,8 @@ public:
         midiTransport = new CEffectMIDITransport (&mMIDIWorld);
         midiEvents.ensureSize (2048);
 
-        channels.calloc (jmax (juceFilter->getNumInputChannelsTotal(false),
-                               juceFilter->getNumOutputChannelsTotal()));
+        channels.calloc (jmax (juceFilter->getTotalNumInputChannels(),
+                               juceFilter->getTotalNumOutputChannels()));
 
         juceFilter->setPlayHead (this);
         juceFilter->addListener (this);
@@ -552,14 +535,14 @@ public:
 
        #if JUCE_DEBUG || JUCE_LOG_ASSERTIONS
         const int numMidiEventsComingIn = midiEvents.getNumEvents();
-        (void) numMidiEventsComingIn;
+        ignoreUnused (numMidiEventsComingIn);
        #endif
 
         {
             const ScopedLock sl (juceFilter->getCallbackLock());
 
-            const int numIn = juceFilter->getNumInputChannelsTotal(true);
-            const int numOut = juceFilter->getNumOutputChannelsTotal();
+            const int numIn  = juceFilter->getTotalNumInputChannels();
+            const int numOut = juceFilter->getTotalNumOutputChannels();
             const int totalChans = jmax (numIn, numOut);
 
             if (juceFilter->isSuspended())
@@ -614,29 +597,6 @@ public:
         }
     }
 
-#if JucePlugin_AcceptsSideChain
-    //==============================================================================
-    virtual ComponentResult ConnectInput(long portNum, long connection) override {
-        ComponentResult ret = CEffectProcessRTAS::ConnectInput(portNum, connection);
-
-        // Check if side chain was just connected
-        if (portNum == fNumInputs && ret == noErr) {
-            juceFilter->setInputElementActive (portNum, true);
-        }
-        return ret;
-    }
-    
-    virtual ComponentResult DisconnectInput(long portNum) override {
-        ComponentResult ret = CEffectProcessRTAS::DisconnectInput(portNum);
-
-        // Check if side chain was just disconnected
-        if (portNum == fNumInputs && ret == noErr) {
-            juceFilter->setInputElementActive (portNum, false);
-        }
-        return ret;
-    }
-#endif
-    
     //==============================================================================
     ComponentResult GetChunkSize (OSType chunkID, long* size) override
     {
@@ -951,10 +911,6 @@ public:
 
                #if JucePlugin_RTASDisableMultiMono
                 type->AddGestalt (pluginGestalt_DoesntSupportMultiMono);
-               #endif
-
-               #if JucePlugin_AcceptsSideChain
-                type->AddGestalt (pluginGestalt_SideChainInput);
                #endif
 
                 type->AddGestalt (pluginGestalt_SupportsVariableQuanta);

@@ -25,6 +25,31 @@
 #include "../jucer_Headers.h"
 #include "../Application/jucer_Application.h"
 
+namespace
+{
+    bool keyFoundAndNotSequentialDuplicate (XmlElement* xml, const String& key)
+    {
+        forEachXmlChildElementWithTagName (*xml, element, "key")
+        {
+            if (element->getAllSubText().trim().equalsIgnoreCase (key))
+            {
+                if (element->getNextElement() != nullptr && element->getNextElement()->hasTagName ("key"))
+                {
+                    // found broken plist format (sequential duplicate), fix by removing
+                    xml->removeChildElement (element, true);
+                    return false;
+                }
+
+                // key found (not sequential duplicate)
+                return true;
+            }
+        }
+
+         // key not found
+        return false;
+    }
+}
+
 //==============================================================================
 String createAlphaNumericUID()
 {
@@ -185,20 +210,8 @@ StringArray getCleanedStringArray (StringArray s)
 
 void addPlistDictionaryKey (XmlElement* xml, const String& key, const String& value)
 {
-    forEachXmlChildElementWithTagName (*xml, e, "key")
-    {
-        if (e->getAllSubText().trim().equalsIgnoreCase (key))
-        {
-            if (e->getNextElement() != nullptr && e->getNextElement()->hasTagName ("key"))
-            {
-                // try to fix broken plist format..
-                xml->removeChildElement (e, true);
-                break;
-            }
-
-            return; // (value already exists)
-        }
-    }
+    if (keyFoundAndNotSequentialDuplicate (xml, key))
+        return;
 
     xml->createNewChildElement ("key")->addTextElement (key);
     xml->createNewChildElement ("string")->addTextElement (value);
@@ -206,12 +219,18 @@ void addPlistDictionaryKey (XmlElement* xml, const String& key, const String& va
 
 void addPlistDictionaryKeyBool (XmlElement* xml, const String& key, const bool value)
 {
+    if (keyFoundAndNotSequentialDuplicate (xml, key))
+        return;
+
     xml->createNewChildElement ("key")->addTextElement (key);
     xml->createNewChildElement (value ? "true" : "false");
 }
 
 void addPlistDictionaryKeyInt (XmlElement* xml, const String& key, int value)
 {
+    if (keyFoundAndNotSequentialDuplicate (xml, key))
+        return;
+
     xml->createNewChildElement ("key")->addTextElement (key);
     xml->createNewChildElement ("integer")->addTextElement (String (value));
 }
@@ -241,6 +260,21 @@ int indexOfLineStartingWith (const StringArray& lines, const String& text, int i
     }
 
     return -1;
+}
+
+//==============================================================================
+bool fileNeedsCppSyntaxHighlighting (const File& file)
+{
+    if (file.hasFileExtension (sourceOrHeaderFileExtensions))
+        return true;
+
+    // This is a bit of a bodge to deal with libc++ headers with no extension..
+    char fileStart[128] = { 0 };
+    FileInputStream fin (file);
+    fin.read (fileStart, sizeof (fileStart) - 4);
+
+    return CharPointer_UTF8::isValidString (fileStart, sizeof (fileStart))
+             && String (fileStart).trimStart().startsWith ("// -*- C++ -*-");
 }
 
 //==============================================================================
@@ -292,7 +326,7 @@ String RolloverHelpComp::findTip (Component* c)
 {
     while (c != nullptr)
     {
-        if (TooltipClient* const tc = dynamic_cast <TooltipClient*> (c))
+        if (TooltipClient* const tc = dynamic_cast<TooltipClient*> (c))
         {
             const String tip (tc->getTooltip());
 

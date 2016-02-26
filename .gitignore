@@ -48,4 +48,6 @@ profile
 **/CodeBlocks/obj
 **/CodeBlocks/*.depend
 **/CodeBlocks/*.layout
+**/Builds/AndroidStudio
 doxygen/doc
+project.xcworkspace

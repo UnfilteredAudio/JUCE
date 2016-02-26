@@ -120,7 +120,7 @@ SourceCodeEditor::SourceCodeEditor (OpenDocumentManager::Document* doc, CodeDocu
     GenericCodeEditorComponent* ed = nullptr;
     const File file (document->getFile());
 
-    if (file.hasFileExtension (sourceOrHeaderFileExtensions))
+    if (fileNeedsCppSyntaxHighlighting (file))
     {
         ed = new CppCodeEditorComponent (file, codeDocument);
     }
@@ -159,7 +159,7 @@ SourceCodeEditor::~SourceCodeEditor()
 
     getAppSettings().appearance.settings.removeListener (this);
 
-    if (SourceCodeDocument* doc = dynamic_cast <SourceCodeDocument*> (getDocument()))
+    if (SourceCodeDocument* doc = dynamic_cast<SourceCodeDocument*> (getDocument()))
         doc->updateLastState (*editor);
 }
 
