@@ -1244,12 +1244,18 @@ struct AAXClasses
             const JUCEAlgorithmContext& i = **iter;
 			
 #if JucePlugin_AcceptsSideChain
-			int32_t sideChainChannel = *i.sideChain;
+			int32_t sideChainChannel = *i.sideChainBuffers;
 			if(sideChainChannel){
-				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, true);
+				i.pluginInstance->parameters.getPluginInstance().setPreferredBusArrangement(true, 1, AudioChannelSet::mono());
 			} else {
-				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, false);
+				i.pluginInstance->parameters.getPluginInstance().setPreferredBusArrangement(true, 1, AudioChannelSet::disabled());
 			}
+			//			int32_t sideChainChannel = *i.sideChain;
+			//			if(sideChainChannel){
+			//				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, true);
+			//			} else {
+			//				i.pluginInstance->parameters.getPluginInstance().setInputElementActive(1, false);
+			//			}
 #endif
 
             int sideChainBufferIdx = i.pluginInstance->parameters.supportsSidechain() && i.sideChainBuffers != nullptr
