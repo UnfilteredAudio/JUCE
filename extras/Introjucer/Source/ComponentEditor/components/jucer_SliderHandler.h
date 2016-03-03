@@ -58,6 +58,7 @@ public:
         e->setAttribute ("textBoxWidth", s->getTextBoxWidth());
         e->setAttribute ("textBoxHeight", s->getTextBoxHeight());
         e->setAttribute ("skewFactor", s->getSkewFactor());
+		e->setAttribute("needsCallback", needsSliderListener(s));
 
         return e;
     }
@@ -81,6 +82,8 @@ public:
                             xml.getIntAttribute ("textBoxHeight", 20));
 
         s->setSkewFactor (xml.getDoubleAttribute ("skewFactor", 1.0));
+
+		setNeedsSliderListener(s, xml.getBoolAttribute("needsCallback", true));
 
         return true;
     }
@@ -108,7 +111,7 @@ public:
           << ", " << s->getTextBoxWidth() << ", " << s->getTextBoxHeight() << ");\n"
           << getColourIntialisationCode (component, memberVariableName);
 
-        if (needsCallback (component))
+		if (needsSliderListener(component))
             r << memberVariableName << "->addListener (this);\n";
 
         if (s->getSkewFactor() != 1.0)
@@ -122,7 +125,7 @@ public:
     {
         ComponentTypeHandler::fillInGeneratedCode (component, code);
 
-        if (needsCallback (component))
+		if (needsSliderListener(component))
         {
             String& callback = code.getCallbackCode ("public SliderListener",
                                                      "void",
@@ -157,14 +160,20 @@ public:
         props.add (new SliderTextboxSizeProperty (s, document, true));
         props.add (new SliderTextboxSizeProperty (s, document, false));
         props.add (new SliderSkewProperty (s, document));
+		props.add (new SliderCallbackProperty(s, document));
 
         addColourProperties (component, document, props);
     }
 
-    static bool needsCallback (Component*)
-    {
-        return true; //xxx should be a property
-    }
+	static bool needsSliderListener(Component* slider)
+	{
+		return slider->getProperties().getWithDefault("generateListenerCallback", true);
+	}
+
+	static void setNeedsSliderListener(Component* slider, const bool shouldDoCallback)
+	{
+		slider->getProperties().set("generateListenerCallback", shouldDoCallback);
+	}
 
 private:
     //==============================================================================
@@ -394,6 +403,54 @@ private:
             bool newState, oldState;
         };
     };
+
+	//==============================================================================
+	class SliderCallbackProperty : public ComponentBooleanProperty <Slider>
+	{
+	public:
+		SliderCallbackProperty(Slider* s, JucerDocument& doc)
+			: ComponentBooleanProperty <Slider>("callback", "Generate SliderListener", "Generate SliderListener", s, doc)
+		{
+		}
+
+		void setState(bool newState)
+		{
+			document.perform(new SliderCallbackChangeAction(component, *document.getComponentLayout(), newState),
+				"Change button callback");
+		}
+
+		bool getState() const       { return needsSliderListener(component); }
+
+	private:
+		class SliderCallbackChangeAction : public ComponentUndoableAction <Slider>
+		{
+		public:
+			SliderCallbackChangeAction(Slider* const comp, ComponentLayout& l, const bool newState_)
+				: ComponentUndoableAction <Slider>(comp, l),
+				newState(newState_)
+			{
+				oldState = needsSliderListener(comp);
+			}
+
+			bool perform()
+			{
+				showCorrectTab();
+				setNeedsSliderListener(getComponent(), newState);
+				changed();
+				return true;
+			}
+
+			bool undo()
+			{
+				showCorrectTab();
+				setNeedsSliderListener(getComponent(), oldState);
+				changed();
+				return true;
+			}
+
+			bool newState, oldState;
+		};
+	};
 
     //==============================================================================
     class SliderTextboxSizeProperty  : public ComponentTextProperty <Slider>
