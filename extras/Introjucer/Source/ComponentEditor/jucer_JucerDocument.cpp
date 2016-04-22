@@ -555,7 +555,7 @@ bool JucerDocument::flushChangesToDocuments()
 
     OpenDocumentManager& odm = IntrojucerApp::getApp().openDocumentManager;
 
-    if (SourceCodeDocument* header = dynamic_cast <SourceCodeDocument*> (odm.openFile (nullptr, getHeaderFile())))
+    if (SourceCodeDocument* header = dynamic_cast<SourceCodeDocument*> (odm.openFile (nullptr, getHeaderFile())))
     {
         String existingHeader (header->getCodeDocument().getAllContent());
         String existingCpp (cpp->getCodeDocument().getAllContent());
@@ -697,9 +697,8 @@ public:
         return SourceCodeDocument::createEditor();
     }
 
-    class Type  : public OpenDocumentManager::DocumentType
+    struct Type  : public OpenDocumentManager::DocumentType
     {
-    public:
         Type() {}
 
         bool canOpenFile (const File& f) override                { return JucerDocument::isValidJucerCppFile (f); }
@@ -734,9 +733,9 @@ public:
 
             OpenDocumentManager& odm = IntrojucerApp::getApp().openDocumentManager;
 
-            if (SourceCodeDocument* cpp = dynamic_cast <SourceCodeDocument*> (odm.openFile (nullptr, cppFile)))
+            if (SourceCodeDocument* cpp = dynamic_cast<SourceCodeDocument*> (odm.openFile (nullptr, cppFile)))
             {
-                if (SourceCodeDocument* header = dynamic_cast <SourceCodeDocument*> (odm.openFile (nullptr, headerFile)))
+                if (SourceCodeDocument* header = dynamic_cast<SourceCodeDocument*> (odm.openFile (nullptr, headerFile)))
                 {
                     ScopedPointer<JucerDocument> jucerDoc (new ComponentDocument (cpp));
 
@@ -752,8 +751,8 @@ public:
                         odm.closeDocument (cpp, true);
                         odm.closeDocument (header, true);
 
-                        parent.addFile (headerFile, 0, true);
-                        parent.addFile (cppFile, 0, true);
+                        parent.addFileRetainingSortOrder (headerFile, true);
+                        parent.addFileRetainingSortOrder (cppFile, true);
                     }
                 }
             }

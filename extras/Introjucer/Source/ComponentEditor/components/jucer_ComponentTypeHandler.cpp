@@ -100,10 +100,10 @@ JucerDocument* ComponentTypeHandler::findParentDocument (Component* component)
 
     while (p != nullptr)
     {
-        if (JucerDocumentEditor* const ed = dynamic_cast <JucerDocumentEditor*> (p))
+        if (JucerDocumentEditor* const ed = dynamic_cast<JucerDocumentEditor*> (p))
             return ed->getDocument();
 
-        if (TestComponent* const t = dynamic_cast <TestComponent*> (p))
+        if (TestComponent* const t = dynamic_cast<TestComponent*> (p))
             return t->getDocument();
 
         p = p->getParentComponent();
@@ -151,7 +151,7 @@ XmlElement* ComponentTypeHandler::createXmlFor (Component* comp, const Component
     pos.updateFromComponent (*comp, layout);
     pos.applyToXml (*e);
 
-    if (SettableTooltipClient* const ttc = dynamic_cast <SettableTooltipClient*> (comp))
+    if (SettableTooltipClient* const ttc = dynamic_cast<SettableTooltipClient*> (comp))
         if (ttc->getTooltip().isNotEmpty())
             e->setAttribute ("tooltip", ttc->getTooltip());
 
@@ -191,7 +191,7 @@ bool ComponentTypeHandler::restoreFromXml (const XmlElement& xml,
     jassert (layout != 0);
     setComponentPosition (comp, rpr, layout);
 
-    if (SettableTooltipClient* const ttc = dynamic_cast <SettableTooltipClient*> (comp))
+    if (SettableTooltipClient* const ttc = dynamic_cast<SettableTooltipClient*> (comp))
         ttc->setTooltip (xml.getStringAttribute ("tooltip"));
 
     for (int i = 0; i < colours.size(); ++i)
@@ -264,13 +264,13 @@ public:
     {
     }
 
-    String getText() const
+    String getText() const override
     {
-        SettableTooltipClient* ttc = dynamic_cast <SettableTooltipClient*> (component);
+        SettableTooltipClient* ttc = dynamic_cast<SettableTooltipClient*> (component);
         return ttc->getTooltip();
     }
 
-    void setText (const String& newText)
+    void setText (const String& newText) override
     {
         document.perform (new SetTooltipAction (component, *document.getComponentLayout(), newText),
                           "Change tooltip");
@@ -284,7 +284,7 @@ private:
             : ComponentUndoableAction<Component> (comp, l),
               newValue (newValue_)
         {
-            SettableTooltipClient* ttc = dynamic_cast <SettableTooltipClient*> (comp);
+            SettableTooltipClient* ttc = dynamic_cast<SettableTooltipClient*> (comp);
             jassert (ttc != nullptr);
             oldValue = ttc->getTooltip();
         }
@@ -293,7 +293,7 @@ private:
         {
             showCorrectTab();
 
-            if (SettableTooltipClient* ttc = dynamic_cast <SettableTooltipClient*> (getComponent()))
+            if (SettableTooltipClient* ttc = dynamic_cast<SettableTooltipClient*> (getComponent()))
             {
                 ttc->setTooltip (newValue);
                 changed();
@@ -307,7 +307,7 @@ private:
         {
             showCorrectTab();
 
-            if (SettableTooltipClient* ttc = dynamic_cast <SettableTooltipClient*> (getComponent()))
+            if (SettableTooltipClient* ttc = dynamic_cast<SettableTooltipClient*> (getComponent()))
             {
                 ttc->setTooltip (oldValue);
                 changed();
@@ -366,12 +366,12 @@ public:
     {
     }
 
-    String getText() const
+    String getText() const override
     {
         return String (component->getExplicitFocusOrder());
     }
 
-    void setText (const String& newText)
+    void setText (const String& newText) override
     {
         document.perform (new SetFocusOrderAction (component, *document.getComponentLayout(), jmax (0, newText.getIntValue())),
                           "Change focus order");
@@ -422,7 +422,7 @@ void ComponentTypeHandler::getEditableProperties (Component* component,
     props.add (new ComponentPositionProperty (component, document, "width", ComponentPositionProperty::componentWidth));
     props.add (new ComponentPositionProperty (component, document, "height", ComponentPositionProperty::componentHeight));
 
-    if (dynamic_cast <SettableTooltipClient*> (component) != nullptr)
+    if (dynamic_cast<SettableTooltipClient*> (component) != nullptr)
         props.add (new TooltipProperty (component, document));
 
     props.add (new FocusOrderProperty (component, document));
@@ -551,7 +551,7 @@ void ComponentTypeHandler::fillInCreationCode (GeneratedCode& code, Component* c
         s << " (" << params << "));\n";
     }
 
-    if (SettableTooltipClient* ttc = dynamic_cast <SettableTooltipClient*> (component))
+    if (SettableTooltipClient* ttc = dynamic_cast<SettableTooltipClient*> (component))
     {
         if (ttc->getTooltip().isNotEmpty())
         {

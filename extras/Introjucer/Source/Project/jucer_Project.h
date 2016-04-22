@@ -105,6 +105,7 @@ public:
 
     //==============================================================================
     File getGeneratedCodeFolder() const                         { return getFile().getSiblingFile ("JuceLibraryCode"); }
+    File getSourceFilesFolder() const                           { return getProjectFolder().getChildFile ("Source"); }
     File getLocalModulesFolder() const                          { return getGeneratedCodeFolder().getChildFile ("modules"); }
     File getLocalModuleFolder (const String& moduleID) const    { return getLocalModulesFolder().getChildFile (moduleID); }
     File getAppIncludeFile() const                              { return getGeneratedCodeFolder().getChildFile (getJuceSourceHFilename()); }
@@ -115,13 +116,8 @@ public:
     Value shouldIncludeBinaryInAppConfig()              { return getProjectValue (Ids::includeBinaryInAppConfig); }
 
     //==============================================================================
-    String getAmalgamatedHeaderFileName() const         { return "juce_amalgamated.h"; }
-    String getAmalgamatedMMFileName() const             { return "juce_amalgamated.mm"; }
-    String getAmalgamatedCppFileName() const            { return "juce_amalgamated.cpp"; }
-
     String getAppConfigFilename() const                 { return "AppConfig.h"; }
     String getJuceSourceFilenameRoot() const            { return "JuceLibraryCode"; }
-    int getNumSeparateAmalgamatedFiles() const          { return 4; }
     String getJuceSourceHFilename() const               { return "JuceHeader.h"; }
 
     //==============================================================================
@@ -166,8 +162,13 @@ public:
         bool shouldBeAddedToTargetProject() const;
         bool shouldBeCompiled() const;
         Value getShouldCompileValue();
+
         bool shouldBeAddedToBinaryResources() const;
-        Value getShouldAddToResourceValue();
+        Value getShouldAddToBinaryResourcesValue();
+
+        bool shouldBeAddedToXcodeResources() const;
+        Value getShouldAddToXcodeResourcesValue();
+
         Value getShouldInhibitWarningsValue();
         bool shouldInhibitWarnings() const;
         Value getShouldUseStdCallValue();
@@ -181,7 +182,8 @@ public:
         Item addNewSubGroup (const String& name, int insertIndex);
         Item getOrCreateSubGroup (const String& name);
         void addChild (const Item& newChild, int insertIndex);
-        bool addFile (const File& file, int insertIndex, bool shouldCompile);
+        bool addFileAtIndex (const File& file, int insertIndex, bool shouldCompile);
+        bool addFileRetainingSortOrder (const File& file, bool shouldCompile);
         void addFileUnchecked (const File& file, int insertIndex, bool shouldCompile);
         bool addRelativeFile (const RelativePath& file, int insertIndex, bool shouldCompile);
         void removeItemFromProject();
@@ -272,6 +274,7 @@ private:
     friend class Item;
     ValueTree projectRoot;
     ScopedPointer<EnabledModuleList> enabledModulesList;
+    bool isSaving;
 
     void updateProjectSettings();
     void sanitiseConfigFlags();

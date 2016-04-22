@@ -23,6 +23,11 @@
 */
 
 //==============================================================================
+
+#ifndef JUCER_MISCUTILITIES_H_INCLUDED
+#define JUCER_MISCUTILITIES_H_INCLUDED
+
+
 String hexString8Digits (int value);
 
 String createAlphaNumericUID();
@@ -44,6 +49,8 @@ void setValueIfVoid (Value value, const var& defaultValue);
 void addPlistDictionaryKey (XmlElement* xml, const String& key, const String& value);
 void addPlistDictionaryKeyBool (XmlElement* xml, const String& key, bool value);
 void addPlistDictionaryKeyInt (XmlElement* xml, const String& key, int value);
+
+bool fileNeedsCppSyntaxHighlighting (const File& file);
 
 //==============================================================================
 int indexOfLineStartingWith (const StringArray& lines, const String& text, int startIndex);
@@ -171,6 +178,12 @@ public:
         owner = nullptr;
     }
 
+    bool escapeKeyPressed() override
+    {
+        closeButtonPressed();
+        return true;
+    }
+
 private:
     String windowPosProperty;
     ScopedPointer<Component>& owner;
@@ -207,7 +220,7 @@ public:
         setSize (300, 400);
     }
 
-    void resized()
+    void resized() override
     {
         if (defaultButton.isVisible())
         {
@@ -281,7 +294,7 @@ public:
         colourValue.addListener (this);
     }
 
-    void paint (Graphics& g)
+    void paint (Graphics& g) override
     {
         const Colour colour (getColour());
 
@@ -435,7 +448,7 @@ private:
 
         void resized() override
         {
-            Rectangle<int> r (getLocalBounds());
+            juce::Rectangle<int> r (getLocalBounds());
 
             button.setBounds (r.removeFromRight (24));
             textbox.setBounds (r);
@@ -496,3 +509,5 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FilePathPropertyComponent)
 };
+
+#endif // JUCER_MISCUTILITIES_H_INCLUDED

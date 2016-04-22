@@ -80,6 +80,8 @@ private:
     class Window;
 
 public:
+    class CustomComponent;
+
     //==============================================================================
     /** Creates an empty popup menu. */
     PopupMenu();
@@ -165,10 +167,15 @@ public:
         @param commandID            the ID of the command
         @param displayName          if this is non-empty, then this string will be used instead of
                                     the command's registered name
+        @param iconToUse            an optional Drawable object to use as the icon to the left of the item.
+                                    The menu will take ownership of this drawable object and will
+                                    delete it later when no longer needed
     */
     void addCommandItem (ApplicationCommandManager* commandManager,
                          CommandID commandID,
-                         const String& displayName = String::empty);
+                         const String& displayName = String::empty,
+                         Drawable* iconToUse = nullptr);
+
 
 
     /** Appends a text item with a special colour.
@@ -182,7 +189,31 @@ public:
                           Colour itemTextColour,
                           bool isEnabled = true,
                           bool isTicked = false,
-                          const Image& iconToUse = Image::null);
+                          const Image& iconToUse = Image());
+
+    /** Appends a text item with a special colour.
+
+        This is the same as addItem(), but specifies a colour to use for the
+        text, which will override the default colours that are used by the
+        current look-and-feel. See addItem() for a description of the parameters.
+    */
+    void addColouredItem (int itemResultID,
+                          const String& itemText,
+                          Colour itemTextColour,
+                          bool isEnabled,
+                          bool isTicked,
+                          Drawable* iconToUse);
+
+    /** Appends a custom menu item.
+
+        This will add a user-defined component to use as a menu item. The component
+        passed in will be deleted by this menu when it's no longer needed.
+
+        @see CustomComponent
+    */
+    void addCustomItem (int itemResultID,
+                        CustomComponent* customComponent,
+                        const PopupMenu* optionalSubMenu = nullptr);
 
     /** Appends a custom menu item that can't be used to trigger a result.
 
@@ -194,12 +225,11 @@ public:
         detection of a mouse-click on your component, and use that to trigger the
         menu ID specified in itemResultID. If this is false, the menu item can't
         be triggered, so itemResultID is not used.
-
-        @see CustomComponent
     */
     void addCustomItem (int itemResultID,
                         Component* customComponent,
-                        int idealWidth, int idealHeight,
+                        int idealWidth,
+                        int idealHeight,
                         bool triggerMenuItemAutomaticallyWhenClicked,
                         const PopupMenu* optionalSubMenu = nullptr);
 
@@ -531,17 +561,6 @@ public:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CustomComponent)
     };
 
-    /** Appends a custom menu item.
-
-        This will add a user-defined component to use as a menu item. The component
-        passed in will be deleted by this menu when it's no longer needed.
-
-        @see CustomComponent
-    */
-    void addCustomItem (int itemResultID, CustomComponent* customComponent,
-                        const PopupMenu* optionalSubMenu = nullptr);
-
-
     //==============================================================================
     /** This abstract base class is implemented by LookAndFeel classes to provide
         menu drawing functionality.
@@ -608,7 +627,7 @@ private:
     friend class MenuBarComponent;
 
     OwnedArray<Item> items;
-    LookAndFeel* lookAndFeel;
+    WeakReference<LookAndFeel> lookAndFeel;
 
     Component* createWindow (const Options&, ApplicationCommandManager**) const;
     int showWithOptionalCallback (const Options&, ModalComponentManager::Callback*, bool);

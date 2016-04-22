@@ -36,7 +36,7 @@ public:
 
     XmlElement* createXmlFor (Component* comp, const ComponentLayout* layout)
     {
-        ComboBox* const c = dynamic_cast <ComboBox*> (comp);
+        ComboBox* const c = dynamic_cast<ComboBox*> (comp);
         jassert (c != nullptr);
 
         XmlElement* e = ComponentTypeHandler::createXmlFor (comp, layout);
@@ -57,7 +57,7 @@ public:
 
         ComboBox defaultBox (String::empty);
 
-        ComboBox* const c = dynamic_cast <ComboBox*> (comp);
+        ComboBox* const c = dynamic_cast<ComboBox*> (comp);
         jassert (c != nullptr);
 
         c->setEditableText (xml.getBoolAttribute ("editable", defaultBox.isTextEditable()));
@@ -75,7 +75,7 @@ public:
     {
         ComponentTypeHandler::getEditableProperties (component, document, props);
 
-        ComboBox* const c = dynamic_cast <ComboBox*> (component);
+        ComboBox* const c = dynamic_cast<ComboBox*> (component);
         jassert (c != nullptr);
 
         props.add (new ComboItemsProperty (c, document));
@@ -94,7 +94,7 @@ public:
     {
         ComponentTypeHandler::fillInCreationCode (code, component, memberVariableName);
 
-        ComboBox* const c = dynamic_cast <ComboBox*> (component);
+        ComboBox* const c = dynamic_cast<ComboBox*> (component);
         jassert (c != nullptr);
 
         String s;
@@ -281,13 +281,13 @@ private:
             : ComponentTextProperty <ComboBox> ("items", 10000, true, comp, doc)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new ComboItemsChangeAction (component, *document.getComponentLayout(), newText),
                               "Change combo box items");
         }
 
-        String getText() const
+        String getText() const override
         {
             return component->getProperties() ["items"];
         }
@@ -333,13 +333,13 @@ private:
             : ComponentTextProperty <ComboBox> ("text when none selected", 200, false, comp, doc)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new ComboNonSelTextChangeAction (component, *document.getComponentLayout(), newText),
                               "Change combo box text when nothing selected");
         }
 
-        String getText() const
+        String getText() const override
         {
             return component->getTextWhenNothingSelected();
         }
@@ -383,13 +383,13 @@ private:
             : ComponentTextProperty <ComboBox> ("text when no items", 200, false, comp, doc)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new ComboNoItemTextChangeAction (component, *document.getComponentLayout(), newText),
                               "Change combo box 'no items' text");
         }
 
-        String getText() const
+        String getText() const override
         {
             return component->getTextWhenNoChoicesAvailable();
         }

@@ -89,6 +89,8 @@ public:
 
         if (getTargetLocationString().isEmpty())
             getTargetLocationValue() = getDefaultBuildsRootFolder() + getTargetFolderName (os);
+
+        initialiseDependencyPathValues();
     }
 
     //==============================================================================
@@ -121,8 +123,8 @@ private:
     class CodeBlocksBuildConfiguration  : public BuildConfiguration
     {
     public:
-        CodeBlocksBuildConfiguration (Project& p, const ValueTree& settings)
-            : BuildConfiguration (p, settings)
+        CodeBlocksBuildConfiguration (Project& p, const ValueTree& settings, const ProjectExporter& e)
+            : BuildConfiguration (p, settings, e)
         {
         }
 
@@ -136,7 +138,7 @@ private:
 
     BuildConfiguration::Ptr createBuildConfig (const ValueTree& tree) const override
     {
-        return new CodeBlocksBuildConfiguration (project, tree);
+        return new CodeBlocksBuildConfiguration (project, tree, *this);
     }
 
     //==============================================================================
@@ -399,6 +401,21 @@ private:
     void setAddOption (XmlElement& xml, const String& nm, const String& value) const
     {
         xml.createNewChildElement ("Add")->setAttribute (nm, value);
+    }
+
+    void initialiseDependencyPathValues()
+    {
+        DependencyPathOS pathOS = isLinux() ? TargetOS::linux
+                                            : TargetOS::windows;
+
+        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder), Ids::vst2Path, pathOS)));
+        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder), Ids::vst3Path, pathOS)));
+
+        if (! isLinux())
+        {
+            aaxPath.referTo  (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder), Ids::aaxPath, pathOS)));
+            rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder), Ids::rtasPath, pathOS)));
+        }
     }
 
     CodeBlocksOS os;

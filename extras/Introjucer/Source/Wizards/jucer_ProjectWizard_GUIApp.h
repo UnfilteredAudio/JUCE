@@ -30,7 +30,7 @@ struct GUIAppWizard   : public NewProjectWizard
     String getDescription() const override  { return TRANS("Creates a blank JUCE application with a single window component."); }
     const char* getIcon() const override    { return BinaryData::wizard_GUI_svg; }
 
-    void addSetupItems (Component& setupComp, OwnedArray<Component>& itemsCreated)
+    void addSetupItems (Component& setupComp, OwnedArray<Component>& itemsCreated) override
     {
         const String fileOptions[] = { TRANS("Create a Main.cpp file"),
                                        TRANS("Create a Main.cpp file and a basic window"),
@@ -41,7 +41,7 @@ struct GUIAppWizard   : public NewProjectWizard
             .setSelectedId (2);
     }
 
-    Result processResultsFromSetupItems (WizardComp& setupComp)
+    Result processResultsFromSetupItems (WizardComp& setupComp) override
     {
         createMainCpp = createWindow = false;
 
@@ -56,7 +56,7 @@ struct GUIAppWizard   : public NewProjectWizard
         return Result::ok();
     }
 
-    bool initialiseProject (Project& project)
+    bool initialiseProject (Project& project) override
     {
         createSourceFolder();
 
@@ -93,8 +93,8 @@ struct GUIAppWizard   : public NewProjectWizard
             if (! FileHelpers::overwriteFileWithNewDataIfDifferent (contentCompCpp, windowCpp))
                 failedFiles.add (contentCompCpp.getFullPathName());
 
-            sourceGroup.addFile (contentCompCpp, -1, true);
-            sourceGroup.addFile (contentCompH, -1, false);
+            sourceGroup.addFileAtIndex (contentCompCpp, -1, true);
+            sourceGroup.addFileAtIndex (contentCompH, -1, false);
         }
 
         if (createMainCpp)
@@ -110,7 +110,7 @@ struct GUIAppWizard   : public NewProjectWizard
             if (! FileHelpers::overwriteFileWithNewDataIfDifferent (mainCppFile, mainCpp))
                 failedFiles.add (mainCppFile.getFullPathName());
 
-            sourceGroup.addFile (mainCppFile, -1, true);
+            sourceGroup.addFileAtIndex (mainCppFile, -1, true);
         }
 
         return true;

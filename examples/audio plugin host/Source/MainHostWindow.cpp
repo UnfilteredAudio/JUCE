@@ -31,7 +31,7 @@
 class MainHostWindow::PluginListWindow  : public DocumentWindow
 {
 public:
-    PluginListWindow (MainHostWindow& owner_, AudioPluginFormatManager& formatManager)
+    PluginListWindow (MainHostWindow& owner_, AudioPluginFormatManager& pluginFormatManager)
         : DocumentWindow ("Available Plugins", Colours::white,
                           DocumentWindow::minimiseButton | DocumentWindow::closeButton),
           owner (owner_)
@@ -39,7 +39,7 @@ public:
         const File deadMansPedalFile (getAppProperties().getUserSettings()
                                         ->getFile().getSiblingFile ("RecentlyCrashedPluginsList"));
 
-        setContentOwned (new PluginListComponent (formatManager,
+        setContentOwned (new PluginListComponent (pluginFormatManager,
                                                   owner.knownPluginList,
                                                   deadMansPedalFile,
                                                   getAppProperties().getUserSettings()), true);
@@ -105,6 +105,7 @@ MainHostWindow::MainHostWindow()
                             ->getIntValue ("pluginSortMethod", KnownPluginList::sortByManufacturer);
 
     knownPluginList.addChangeListener (this);
+    getGraphEditor()->graph.addChangeListener (this);
 
     addKeyListener (getCommandManager().getKeyMappings());
 
@@ -130,6 +131,7 @@ MainHostWindow::~MainHostWindow()
    #endif
 
     knownPluginList.removeChangeListener (this);
+    getGraphEditor()->graph.removeChangeListener (this);
 
     getAppProperties().getUserSettings()->setValue ("mainWindowPos", getWindowStateAsString());
     clearContentComponent();
@@ -154,24 +156,38 @@ bool MainHostWindow::tryToQuitApplication()
     return false;
 }
 
-void MainHostWindow::changeListenerCallback (ChangeBroadcaster*)
+void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
 {
-    menuItemsChanged();
-
-    // save the plugin list every time it gets chnaged, so that if we're scanning
-    // and it crashes, we've still saved the previous ones
-    ScopedPointer<XmlElement> savedPluginList (knownPluginList.createXml());
-
-    if (savedPluginList != nullptr)
+    if (changed == &knownPluginList)
     {
-        getAppProperties().getUserSettings()->setValue ("pluginList", savedPluginList);
-        getAppProperties().saveIfNeeded();
+        menuItemsChanged();
+
+        // save the plugin list every time it gets chnaged, so that if we're scanning
+        // and it crashes, we've still saved the previous ones
+        ScopedPointer<XmlElement> savedPluginList (knownPluginList.createXml());
+
+        if (savedPluginList != nullptr)
+        {
+            getAppProperties().getUserSettings()->setValue ("pluginList", savedPluginList);
+            getAppProperties().saveIfNeeded();
+        }
+    }
+    else if (changed == &getGraphEditor()->graph)
+    {
+        String title = JUCEApplication::getInstance()->getApplicationName();
+
+        File f = getGraphEditor()->graph.getFile();
+
+        if (f.existsAsFile())
+            title = f.getFileName() + " - " + title;
+
+        setName (title);
     }
 }
 
 StringArray MainHostWindow::getMenuBarNames()
 {
-    const char* const names[] = { "File", "Plugins", "Options", nullptr };
+    const char* const names[] = { "File", "Plugins", "Options", "Windows", nullptr };
 
     return StringArray (names);
 }
@@ -183,6 +199,7 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
     if (topLevelMenuIndex == 0)
     {
         // "File" menu
+        menu.addCommandItem (&getCommandManager(), CommandIDs::newFile);
         menu.addCommandItem (&getCommandManager(), CommandIDs::open);
 
         RecentlyOpenedFilesList recentFiles;
@@ -223,9 +240,14 @@ PopupMenu MainHostWindow::getMenuForIndex (int topLevelMenuIndex, const String& 
 
         menu.addSeparator();
         menu.addCommandItem (&getCommandManager(), CommandIDs::showAudioSettings);
+        menu.addCommandItem (&getCommandManager(), CommandIDs::toggleDoublePrecision);
 
         menu.addSeparator();
         menu.addCommandItem (&getCommandManager(), CommandIDs::aboutBox);
+    }
+    else if (topLevelMenuIndex == 3)
+    {
+        menu.addCommandItem (&getCommandManager(), CommandIDs::allWindowsForward);
     }
 
     return menu;
@@ -304,12 +326,15 @@ ApplicationCommandTarget* MainHostWindow::getNextCommandTarget()
 void MainHostWindow::getAllCommands (Array <CommandID>& commands)
 {
     // this returns the set of all commands that this target can perform..
-    const CommandID ids[] = { CommandIDs::open,
+    const CommandID ids[] = { CommandIDs::newFile,
+                              CommandIDs::open,
                               CommandIDs::save,
                               CommandIDs::saveAs,
                               CommandIDs::showPluginListEditor,
                               CommandIDs::showAudioSettings,
-                              CommandIDs::aboutBox
+                              CommandIDs::toggleDoublePrecision,
+                              CommandIDs::aboutBox,
+                              CommandIDs::allWindowsForward
                             };
 
     commands.addArray (ids, numElementsInArray (ids));
@@ -321,17 +346,18 @@ void MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationComma
 
     switch (commandID)
     {
+    case CommandIDs::newFile:
+        result.setInfo ("New", "Creates a new filter graph file", category, 0);
+        result.defaultKeypresses.add(KeyPress('n', ModifierKeys::commandModifier, 0));
+        break;
+
     case CommandIDs::open:
-        result.setInfo ("Open...",
-                        "Opens a filter graph file",
-                        category, 0);
+        result.setInfo ("Open...", "Opens a filter graph file", category, 0);
         result.defaultKeypresses.add (KeyPress ('o', ModifierKeys::commandModifier, 0));
         break;
 
     case CommandIDs::save:
-        result.setInfo ("Save",
-                        "Saves the current graph to a file",
-                        category, 0);
+        result.setInfo ("Save", "Saves the current graph to a file", category, 0);
         result.defaultKeypresses.add (KeyPress ('s', ModifierKeys::commandModifier, 0));
         break;
 
@@ -352,8 +378,17 @@ void MainHostWindow::getCommandInfo (const CommandID commandID, ApplicationComma
         result.addDefaultKeypress ('a', ModifierKeys::commandModifier);
         break;
 
+    case CommandIDs::toggleDoublePrecision:
+        updatePrecisionMenuItem (result);
+        break;
+
     case CommandIDs::aboutBox:
         result.setInfo ("About...", String::empty, category, 0);
+        break;
+
+    case CommandIDs::allWindowsForward:
+        result.setInfo ("All Windows Forward", "Bring all plug-in windows forward", category, 0);
+        result.addDefaultKeypress ('w', ModifierKeys::commandModifier);
         break;
 
     default:
@@ -367,10 +402,14 @@ bool MainHostWindow::perform (const InvocationInfo& info)
 
     switch (info.commandID)
     {
+    case CommandIDs::newFile:
+        if (graphEditor != nullptr && graphEditor->graph.saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
+            graphEditor->graph.newDocument();
+        break;
+
     case CommandIDs::open:
         if (graphEditor != nullptr && graphEditor->graph.saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
             graphEditor->graph.loadFromUserSpecifiedFile (true);
-
         break;
 
     case CommandIDs::save:
@@ -394,9 +433,36 @@ bool MainHostWindow::perform (const InvocationInfo& info)
         showAudioSettings();
         break;
 
+    case CommandIDs::toggleDoublePrecision:
+        if (PropertiesFile* props = getAppProperties().getUserSettings())
+        {
+            bool newIsDoublePrecision = ! isDoublePrecisionProcessing();
+            props->setValue ("doublePrecisionProcessing", var (newIsDoublePrecision));
+
+            {
+                ApplicationCommandInfo cmdInfo (info.commandID);
+                updatePrecisionMenuItem (cmdInfo);
+                menuItemsChanged();
+            }
+
+            if (graphEditor != nullptr)
+                graphEditor->setDoublePrecision (newIsDoublePrecision);
+        }
+        break;
+
     case CommandIDs::aboutBox:
         // TODO
         break;
+
+    case CommandIDs::allWindowsForward:
+    {
+        Desktop& desktop = Desktop::getInstance();
+
+        for (int i = 0; i < desktop.getNumComponents(); ++i)
+            desktop.getComponent (i)->toBehind (this);
+
+        break;
+    }
 
     default:
         return false;
@@ -479,5 +545,19 @@ void MainHostWindow::filesDropped (const StringArray& files, int x, int y)
 
 GraphDocumentComponent* MainHostWindow::getGraphEditor() const
 {
-    return dynamic_cast <GraphDocumentComponent*> (getContentComponent());
+    return dynamic_cast<GraphDocumentComponent*> (getContentComponent());
+}
+
+bool MainHostWindow::isDoublePrecisionProcessing()
+{
+    if (PropertiesFile* props = getAppProperties().getUserSettings())
+        return props->getBoolValue ("doublePrecisionProcessing", false);
+
+    return false;
+}
+
+void MainHostWindow::updatePrecisionMenuItem (ApplicationCommandInfo& info)
+{
+    info.setInfo ("Double floating point precision rendering", String::empty, "General", 0);
+    info.setTicked (isDoublePrecisionProcessing());
 }

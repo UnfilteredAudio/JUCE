@@ -78,7 +78,7 @@ public:
     {
         ComponentTypeHandler::fillInCreationCode (code, component, memberVariableName);
 
-        GroupComponent* const g = dynamic_cast <GroupComponent*> (component);
+        GroupComponent* const g = dynamic_cast<GroupComponent*> (component);
 
         String s;
 
@@ -116,13 +116,13 @@ private:
             : ComponentTextProperty <GroupComponent> ("text", 200, false, comp, doc)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new GroupTitleChangeAction (component, *document.getComponentLayout(), newText),
                               "Change group title");
         }
 
-        String getText() const
+        String getText() const override
         {
             return component->getText();
         }

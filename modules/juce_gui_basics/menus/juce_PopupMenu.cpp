@@ -61,8 +61,8 @@ public:
         {
             String shortcutKey;
 
-            const Array <KeyPress> keyPresses (commandManager->getKeyMappings()
-                                                    ->getKeyPressesAssignedToCommand (itemID));
+            const Array<KeyPress> keyPresses (commandManager->getKeyMappings()
+                                                ->getKeyPressesAssignedToCommand (itemID));
 
             for (int i = 0; i < keyPresses.size(); ++i)
             {
@@ -107,8 +107,8 @@ public:
     const Colour textColour;
     const bool isActive, isSeparator, isTicked, usesColour;
     ScopedPointer<Drawable> iconDrawable;
-    ReferenceCountedObjectPtr <CustomComponent> customComp;
-    ScopedPointer <PopupMenu> subMenu;
+    ReferenceCountedObjectPtr<CustomComponent> customComp;
+    ScopedPointer<PopupMenu> subMenu;
     ApplicationCommandManager* const commandManager;
 
 private:
@@ -248,7 +248,7 @@ public:
         setAlwaysOnTop (true);
 
         setLookAndFeel (parent != nullptr ? &(parent->getLookAndFeel())
-                                          : menu.lookAndFeel);
+                                          : menu.lookAndFeel.get());
 
         setOpaque (getLookAndFeel().findColour (PopupMenu::backgroundColourId).isOpaque()
                      || ! Desktop::canUseSemiTransparentWindows());
@@ -1234,7 +1234,6 @@ private:
 
 //==============================================================================
 PopupMenu::PopupMenu()
-    : lookAndFeel (nullptr)
 {
 }
 
@@ -1328,7 +1327,8 @@ void PopupMenu::addItem (int itemResultID, const String& itemText, bool isActive
 
 void PopupMenu::addCommandItem (ApplicationCommandManager* commandManager,
                                 const CommandID commandID,
-                                const String& displayName)
+                                const String& displayName,
+                                Drawable* iconToUse)
 {
     jassert (commandManager != nullptr && commandID != 0);
 
@@ -1342,7 +1342,7 @@ void PopupMenu::addCommandItem (ApplicationCommandManager* commandManager,
                                                       : info.shortName,
                              target != nullptr && (info.flags & ApplicationCommandInfo::isDisabled) == 0,
                              (info.flags & ApplicationCommandInfo::isTicked) != 0,
-                             nullptr,
+                             iconToUse,
                              Colours::black,
                              false,
                              nullptr, nullptr,
@@ -1351,14 +1351,20 @@ void PopupMenu::addCommandItem (ApplicationCommandManager* commandManager,
 }
 
 void PopupMenu::addColouredItem (int itemResultID, const String& itemText, Colour itemTextColour,
-                                 bool isActive, bool isTicked, const Image& iconToUse)
+                                 bool isActive, bool isTicked, Drawable* iconToUse)
 {
     jassert (itemResultID != 0);    // 0 is used as a return value to indicate that the user
                                     // didn't pick anything, so you shouldn't use it as the id
                                     // for an item..
 
-    items.add (new Item (itemResultID, itemText, isActive, isTicked, createDrawableFromImage (iconToUse),
+    items.add (new Item (itemResultID, itemText, isActive, isTicked, iconToUse,
                          itemTextColour, true, nullptr, nullptr, nullptr));
+}
+
+void PopupMenu::addColouredItem (int itemResultID, const String& itemText, Colour itemTextColour,
+                                 bool isActive, bool isTicked, const Image& iconToUse)
+{
+    addColouredItem (itemResultID, itemText, itemTextColour, isActive, isTicked, createDrawableFromImage (iconToUse));
 }
 
 void PopupMenu::addCustomItem (int itemID, CustomComponent* cc, const PopupMenu* subMenu)
@@ -1543,7 +1549,7 @@ int PopupMenu::showWithOptionalCallback (const Options& options, ModalComponentM
         if (userCallback == nullptr && canBeModal)
             return window->runModalLoop();
        #else
-        (void) canBeModal;
+        ignoreUnused (canBeModal);
         jassert (! (userCallback == nullptr && canBeModal));
        #endif
     }

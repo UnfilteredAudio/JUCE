@@ -33,6 +33,8 @@ public:
 
         projectGUID = createGUID (project.getProjectUID());
         updateOldSettings();
+
+        initialiseDependencyPathValues();
     }
 
     //==============================================================================
@@ -126,8 +128,8 @@ protected:
     class MSVCBuildConfiguration  : public BuildConfiguration
     {
     public:
-        MSVCBuildConfiguration (Project& p, const ValueTree& settings)
-            : BuildConfiguration (p, settings)
+        MSVCBuildConfiguration (Project& p, const ValueTree& settings, const ProjectExporter& e)
+            : BuildConfiguration (p, settings, e)
         {
             if (getWarningLevel() == 0)
                 getWarningLevelValue() = 4;
@@ -235,7 +237,7 @@ protected:
 
     BuildConfiguration::Ptr createBuildConfig (const ValueTree& v) const override
     {
-        return new MSVCBuildConfiguration (project, v);
+        return new MSVCBuildConfiguration (project, v, *this);
     }
 
     //==============================================================================
@@ -515,7 +517,7 @@ protected:
            << newLine
            << "  BLOCK \"VarFileInfo\"" << newLine
            << "  BEGIN" << newLine
-           << "    VALUE \"Translation\", 0x409, 65001" << newLine
+           << "    VALUE \"Translation\", 0x409, 1252" << newLine
            << "  END" << newLine
            << "END" << newLine
            << newLine
@@ -555,6 +557,25 @@ protected:
                                                       : (".\\" + filename);
     }
 
+    void initialiseDependencyPathValues()
+    {
+        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),
+                                                                Ids::vst2Path,
+                                                                TargetOS::windows)));
+
+        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder),
+                                                                Ids::vst3Path,
+                                                                TargetOS::windows)));
+
+        aaxPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),
+                                                               Ids::aaxPath,
+                                                               TargetOS::windows)));
+
+        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder),
+                                                                Ids::rtasPath,
+                                                                TargetOS::windows)));
+    }
+
     JUCE_DECLARE_NON_COPYABLE (MSVCProjectExporterBase)
 };
 
@@ -584,7 +605,7 @@ public:
     }
 
     //==============================================================================
-    void create (const OwnedArray<LibraryModule>&) const
+    void create (const OwnedArray<LibraryModule>&) const override
     {
         createResourcesAndIcon();
 
@@ -598,12 +619,12 @@ public:
                 {
                     if (iconFile != File::nonexistent)
                     {
-                        group.addFile (iconFile, -1, true);
-                        group.findItemForFile (iconFile).getShouldAddToResourceValue() = false;
+                        group.addFileAtIndex (iconFile, -1, true);
+                        group.findItemForFile (iconFile).getShouldAddToBinaryResourcesValue() = false;
                     }
 
-                    group.addFile (rcFile, -1, true);
-                    group.findItemForFile (rcFile).getShouldAddToResourceValue() = false;
+                    group.addFileAtIndex (rcFile, -1, true);
+                    group.findItemForFile (rcFile).getShouldAddToBinaryResourcesValue() = false;
 
                     break;
                 }
@@ -945,8 +966,8 @@ public:
     }
 
 protected:
-    String getProjectVersionString() const    { return "8.00"; }
-    String getSolutionVersionString() const   { return String ("9.00") + newLine + "# Visual C++ Express 2005"; }
+    String getProjectVersionString() const override    { return "8.00"; }
+    String getSolutionVersionString() const override   { return String ("9.00") + newLine + "# Visual C++ Express 2005"; }
 
     JUCE_DECLARE_NON_COPYABLE (MSVCProjectExporterVC2005)
 };
@@ -996,7 +1017,7 @@ public:
     }
 
     //==============================================================================
-    void create (const OwnedArray<LibraryModule>&) const
+    void create (const OwnedArray<LibraryModule>&) const override
     {
         createResourcesAndIcon();
 
@@ -1027,8 +1048,8 @@ protected:
     class VC2010BuildConfiguration  : public MSVCBuildConfiguration
     {
     public:
-        VC2010BuildConfiguration (Project& p, const ValueTree& settings)
-            : MSVCBuildConfiguration (p, settings)
+        VC2010BuildConfiguration (Project& p, const ValueTree& settings, const ProjectExporter& e)
+            : MSVCBuildConfiguration (p, settings, e)
         {
             if (getArchitectureType().toString().isEmpty())
                 getArchitectureType() = get32BitArchName();
@@ -1062,9 +1083,9 @@ protected:
 
     virtual void addPlatformToolsetToPropertyGroup (XmlElement&) const {}
 
-    BuildConfiguration::Ptr createBuildConfig (const ValueTree& v) const
+    BuildConfiguration::Ptr createBuildConfig (const ValueTree& v) const override
     {
-        return new VC2010BuildConfiguration (project, v);
+        return new VC2010BuildConfiguration (project, v, *this);
     }
 
     static bool is64Bit (const BuildConfiguration& config)
@@ -1076,7 +1097,7 @@ protected:
     File getVCProjFile() const            { return getProjectFile (".vcxproj"); }
     File getVCProjFiltersFile() const     { return getProjectFile (".vcxproj.filters"); }
 
-    String createConfigName (const BuildConfiguration& config) const
+    String createConfigName (const BuildConfiguration& config) const override
     {
         return config.getName() + (is64Bit (config) ? "|x64"
                                                     : "|Win32");
@@ -1549,7 +1570,7 @@ public:
     static const char* getValueTreeTypeName()   { return "VS2012"; }
     int getVisualStudioVersion() const override { return 11; }
     String getSolutionComment() const override  { return "# Visual Studio 2012"; }
-    virtual String getDefaultToolset() const    { return "v110"; }
+    String getDefaultToolset() const override   { return "v110"; }
 
     static MSVCProjectExporterVC2012* createForSettings (Project& project, const ValueTree& settings)
     {
@@ -1656,8 +1677,8 @@ public:
     {
         MSVCProjectExporterBase::createExporterProperties (props);
 
-        static const char* toolsetNames[] = { "(default)", "v140", "v140_xp", nullptr };
-        const var toolsets[]              = { var(),       "v140", "v140_xp" };
+        static const char* toolsetNames[] = { "(default)", "v140", "v140_xp", "CTP_Nov2013", nullptr };
+        const var toolsets[]              = { var(),       "v140", "v140_xp", "CTP_Nov2013" };
 
         props.add (new ChoicePropertyComponent (getPlatformToolsetValue(), "Platform Toolset",
                                                 StringArray (toolsetNames),

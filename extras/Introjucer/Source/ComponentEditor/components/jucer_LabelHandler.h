@@ -43,7 +43,7 @@ public:
 
     XmlElement* createXmlFor (Component* comp, const ComponentLayout* layout)
     {
-        Label* const l = dynamic_cast <Label*> (comp);
+        Label* const l = dynamic_cast<Label*> (comp);
 
         XmlElement* e = ComponentTypeHandler::createXmlFor (comp, layout);
         e->setAttribute ("labelText", l->getText());
@@ -63,7 +63,7 @@ public:
 
     bool restoreFromXml (const XmlElement& xml, Component* comp, const ComponentLayout* layout)
     {
-        Label* const l = dynamic_cast <Label*> (comp);
+        Label* const l = dynamic_cast<Label*> (comp);
 
         if (! ComponentTypeHandler::restoreFromXml (xml, comp, layout))
             return false;
@@ -99,7 +99,7 @@ public:
 
     String getCreationParameters (GeneratedCode& code, Component* component)
     {
-        Label* const l = dynamic_cast <Label*> (component);
+        Label* const l = dynamic_cast<Label*> (component);
 
         return quotedString (component->getName(), false)
                  + ",\n"
@@ -110,7 +110,7 @@ public:
     {
         ComponentTypeHandler::fillInCreationCode (code, component, memberVariableName);
 
-        Label* const l = dynamic_cast <Label*> (component);
+        Label* const l = dynamic_cast<Label*> (component);
 
         String s;
 
@@ -161,7 +161,7 @@ public:
     {
         ComponentTypeHandler::getEditableProperties (component, document, props);
 
-        Label* const l = dynamic_cast <Label*> (component);
+        Label* const l = dynamic_cast<Label*> (component);
         props.add (new LabelTextProperty (l, document));
 
         props.add (new LabelJustificationProperty (l, document));
@@ -193,13 +193,13 @@ private:
             : ComponentTextProperty <Label> ("text", 10000, true, comp, doc)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new LabelTextChangeAction (component, *document.getComponentLayout(), newText),
                               "Change Label text");
         }
 
-        String getText() const
+        String getText() const override
         {
             return component->getText();
         }

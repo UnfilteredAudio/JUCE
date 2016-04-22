@@ -48,7 +48,7 @@ public:
     {
         XmlElement* e = ComponentTypeHandler::createXmlFor (comp, layout);
 
-        Slider* const s = dynamic_cast <Slider*> (comp);
+        Slider* const s = dynamic_cast<Slider*> (comp);
         e->setAttribute ("min", s->getMinimum());
         e->setAttribute ("max", s->getMaximum());
         e->setAttribute ("int", s->getInterval());
@@ -58,6 +58,7 @@ public:
         e->setAttribute ("textBoxWidth", s->getTextBoxWidth());
         e->setAttribute ("textBoxHeight", s->getTextBoxHeight());
         e->setAttribute ("skewFactor", s->getSkewFactor());
+		e->setAttribute("needsCallback", needsSliderListener(s));
 
         return e;
     }
@@ -67,7 +68,7 @@ public:
         if (! ComponentTypeHandler::restoreFromXml (xml, comp, layout))
             return false;
 
-        Slider* const s = dynamic_cast <Slider*> (comp);
+        Slider* const s = dynamic_cast<Slider*> (comp);
 
         s->setRange (xml.getDoubleAttribute ("min", 0.0),
                      xml.getDoubleAttribute ("max", 10.0),
@@ -82,6 +83,8 @@ public:
 
         s->setSkewFactor (xml.getDoubleAttribute ("skewFactor", 1.0));
 
+		setNeedsSliderListener(s, xml.getBoolAttribute("needsCallback", true));
+
         return true;
     }
 
@@ -94,7 +97,7 @@ public:
     {
         ComponentTypeHandler::fillInCreationCode (code, component, memberVariableName);
 
-        Slider* const s = dynamic_cast <Slider*> (component);
+        Slider* const s = dynamic_cast<Slider*> (component);
 
         String r;
         r << memberVariableName << "->setRange ("
@@ -108,7 +111,7 @@ public:
           << ", " << s->getTextBoxWidth() << ", " << s->getTextBoxHeight() << ");\n"
           << getColourIntialisationCode (component, memberVariableName);
 
-        if (needsCallback (component))
+		if (needsSliderListener(component))
             r << memberVariableName << "->addListener (this);\n";
 
         if (s->getSkewFactor() != 1.0)
@@ -122,7 +125,7 @@ public:
     {
         ComponentTypeHandler::fillInGeneratedCode (component, code);
 
-        if (needsCallback (component))
+		if (needsSliderListener(component))
         {
             String& callback = code.getCallbackCode ("public SliderListener",
                                                      "void",
@@ -145,7 +148,7 @@ public:
     {
         ComponentTypeHandler::getEditableProperties (component, document, props);
 
-        Slider* s = dynamic_cast <Slider*> (component);
+        Slider* s = dynamic_cast<Slider*> (component);
         jassert (s != 0);
 
         props.add (new SliderRangeProperty (s, document, "minimum", 0));
@@ -157,14 +160,20 @@ public:
         props.add (new SliderTextboxSizeProperty (s, document, true));
         props.add (new SliderTextboxSizeProperty (s, document, false));
         props.add (new SliderSkewProperty (s, document));
+		props.add (new SliderCallbackProperty(s, document));
 
         addColourProperties (component, document, props);
     }
 
-    static bool needsCallback (Component*)
-    {
-        return true; //xxx should be a property
-    }
+	static bool needsSliderListener(Component* slider)
+	{
+		return slider->getProperties().getWithDefault("generateListenerCallback", true);
+	}
+
+	static void setNeedsSliderListener(Component* slider, const bool shouldDoCallback)
+	{
+		slider->getProperties().set("generateListenerCallback", shouldDoCallback);
+	}
 
 private:
     //==============================================================================
@@ -226,7 +235,7 @@ private:
                                                   Slider::ThreeValueVertical };
 
             for (int i = 0; i < numElementsInArray (types); ++i)
-                if (types [i] == dynamic_cast <Slider*> (component)->getSliderStyle())
+                if (types [i] == dynamic_cast<Slider*> (component)->getSliderStyle())
                     return i;
 
             return -1;
@@ -395,6 +404,54 @@ private:
         };
     };
 
+	//==============================================================================
+	class SliderCallbackProperty : public ComponentBooleanProperty <Slider>
+	{
+	public:
+		SliderCallbackProperty(Slider* s, JucerDocument& doc)
+			: ComponentBooleanProperty <Slider>("callback", "Generate SliderListener", "Generate SliderListener", s, doc)
+		{
+		}
+
+		void setState(bool newState)
+		{
+			document.perform(new SliderCallbackChangeAction(component, *document.getComponentLayout(), newState),
+				"Change button callback");
+		}
+
+		bool getState() const       { return needsSliderListener(component); }
+
+	private:
+		class SliderCallbackChangeAction : public ComponentUndoableAction <Slider>
+		{
+		public:
+			SliderCallbackChangeAction(Slider* const comp, ComponentLayout& l, const bool newState_)
+				: ComponentUndoableAction <Slider>(comp, l),
+				newState(newState_)
+			{
+				oldState = needsSliderListener(comp);
+			}
+
+			bool perform()
+			{
+				showCorrectTab();
+				setNeedsSliderListener(getComponent(), newState);
+				changed();
+				return true;
+			}
+
+			bool undo()
+			{
+				showCorrectTab();
+				setNeedsSliderListener(getComponent(), oldState);
+				changed();
+				return true;
+			}
+
+			bool newState, oldState;
+		};
+	};
+
     //==============================================================================
     class SliderTextboxSizeProperty  : public ComponentTextProperty <Slider>
     {
@@ -406,13 +463,13 @@ private:
         {
         }
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             document.perform (new SliderBoxSizeChangeAction (component, *document.getComponentLayout(), isWidth, newText.getIntValue()),
                               "Change Slider textbox size");
         }
 
-        String getText() const
+        String getText() const override
         {
             return String (isWidth ? component->getTextBoxWidth()
                                    : component->getTextBoxHeight());
@@ -487,7 +544,7 @@ private:
         {
         }
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             double state [3];
             state [0] = component->getMinimum();
@@ -500,9 +557,9 @@ private:
                               "Change Slider range");
         }
 
-        String getText() const
+        String getText() const override
         {
-            Slider* s = dynamic_cast <Slider*> (component);
+            Slider* s = dynamic_cast<Slider*> (component);
             jassert (s != nullptr);
 
             switch (rangeParam)
@@ -563,7 +620,7 @@ private:
         {
         }
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             const double skew = jlimit (0.001, 1000.0, newText.getDoubleValue());
 
@@ -571,9 +628,9 @@ private:
                               "Change Slider skew");
         }
 
-        String getText() const
+        String getText() const override
         {
-            Slider* s = dynamic_cast <Slider*> (component);
+            Slider* s = dynamic_cast<Slider*> (component);
             jassert (s != 0);
 
             return String (s->getSkewFactor());

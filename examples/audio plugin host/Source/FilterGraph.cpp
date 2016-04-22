@@ -120,28 +120,22 @@ void FilterGraph::removeIllegalConnections()
         changed();
 }
 
-void FilterGraph::setNodePosition (const int nodeId, double x, double y)
+void FilterGraph::setNodePosition (const uint32 nodeId, double x, double y)
 {
-    const AudioProcessorGraph::Node::Ptr n (graph.getNodeForId (nodeId));
-
-    if (n != nullptr)
+    if (AudioProcessorGraph::Node::Ptr n = graph.getNodeForId (nodeId))
     {
         n->properties.set ("x", jlimit (0.0, 1.0, x));
         n->properties.set ("y", jlimit (0.0, 1.0, y));
     }
 }
 
-void FilterGraph::getNodePosition (const int nodeId, double& x, double& y) const
+Point<double> FilterGraph::getNodePosition (const uint32 nodeId) const
 {
-    x = y = 0;
+    if (AudioProcessorGraph::Node::Ptr n = graph.getNodeForId (nodeId))
+        return Point<double> (static_cast<double> (n->properties ["x"]),
+                              static_cast<double> (n->properties ["y"]));
 
-    const AudioProcessorGraph::Node::Ptr n (graph.getNodeForId (nodeId));
-
-    if (n != nullptr)
-    {
-        x = (double) n->properties ["x"];
-        y = (double) n->properties ["y"];
-    }
+    return Point<double>();
 }
 
 //==============================================================================
@@ -212,6 +206,21 @@ String FilterGraph::getDocumentTitle()
     return getFile().getFileNameWithoutExtension();
 }
 
+void FilterGraph::newDocument()
+{
+    clear();
+
+    setFile (File());
+
+    InternalPluginFormat internalFormat;
+
+    addFilter (internalFormat.getDescriptionFor (InternalPluginFormat::audioInputFilter),  0.5f,  0.1f);
+    addFilter (internalFormat.getDescriptionFor (InternalPluginFormat::midiInputFilter),   0.25f, 0.1f);
+    addFilter (internalFormat.getDescriptionFor (InternalPluginFormat::audioOutputFilter), 0.5f,  0.9f);
+
+    setChangedFlag (false);
+}
+
 Result FilterGraph::loadDocument (const File& file)
 {
     XmlDocument doc (file);
@@ -258,7 +267,7 @@ void FilterGraph::setLastDocumentOpened (const File& file)
 //==============================================================================
 static XmlElement* createNodeXml (AudioProcessorGraph::Node* const node) noexcept
 {
-    AudioPluginInstance* plugin = dynamic_cast <AudioPluginInstance*> (node->getProcessor());
+    AudioPluginInstance* plugin = dynamic_cast<AudioPluginInstance*> (node->getProcessor());
 
     if (plugin == nullptr)
     {
@@ -270,8 +279,18 @@ static XmlElement* createNodeXml (AudioProcessorGraph::Node* const node) noexcep
     e->setAttribute ("uid", (int) node->nodeId);
     e->setAttribute ("x", node->properties ["x"].toString());
     e->setAttribute ("y", node->properties ["y"].toString());
-    e->setAttribute ("uiLastX", node->properties ["uiLastX"].toString());
-    e->setAttribute ("uiLastY", node->properties ["uiLastY"].toString());
+
+    for (int i = 0; i < PluginWindow::NumTypes; ++i)
+    {
+        PluginWindow::WindowFormatType type = (PluginWindow::WindowFormatType) i;
+
+        if (node->properties.contains (getOpenProp (type)))
+        {
+            e->setAttribute (getLastXProp (type), node->properties[getLastXProp (type)].toString());
+            e->setAttribute (getLastYProp (type), node->properties[getLastYProp (type)].toString());
+            e->setAttribute (getOpenProp (type),  node->properties[getOpenProp (type)].toString());
+        }
+    }
 
     PluginDescription pd;
     plugin->fillInPluginDescription (pd);
@@ -310,7 +329,7 @@ void FilterGraph::createNodeFromXml (const XmlElement& xml)
     if (instance == nullptr)
         return;
 
-    AudioProcessorGraph::Node::Ptr node (graph.addNode (instance, xml.getIntAttribute ("uid")));
+    AudioProcessorGraph::Node::Ptr node (graph.addNode (instance, (uint32) xml.getIntAttribute ("uid")));
 
     if (const XmlElement* const state = xml.getChildByName ("STATE"))
     {
@@ -322,8 +341,26 @@ void FilterGraph::createNodeFromXml (const XmlElement& xml)
 
     node->properties.set ("x", xml.getDoubleAttribute ("x"));
     node->properties.set ("y", xml.getDoubleAttribute ("y"));
-    node->properties.set ("uiLastX", xml.getIntAttribute ("uiLastX"));
-    node->properties.set ("uiLastY", xml.getIntAttribute ("uiLastY"));
+
+    for (int i = 0; i < PluginWindow::NumTypes; ++i)
+    {
+        PluginWindow::WindowFormatType type = (PluginWindow::WindowFormatType) i;
+
+        if (xml.hasAttribute (getOpenProp (type)))
+        {
+            node->properties.set (getLastXProp (type), xml.getIntAttribute (getLastXProp (type)));
+            node->properties.set (getLastYProp (type), xml.getIntAttribute (getLastYProp (type)));
+            node->properties.set (getOpenProp (type), xml.getIntAttribute (getOpenProp (type)));
+
+            if (node->properties[getOpenProp (type)])
+            {
+                jassert (node->getProcessor() != nullptr);
+
+                if (PluginWindow* const w = PluginWindow::getWindowFor (node, type))
+                    w->toFront (true);
+            }
+        }
+    }
 }
 
 XmlElement* FilterGraph::createXml() const

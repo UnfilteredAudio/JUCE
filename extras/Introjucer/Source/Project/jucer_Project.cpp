@@ -35,7 +35,8 @@ Project::Project (const File& f)
                          String ("*") + projectFileExtension,
                          "Choose a Jucer project to load",
                          "Save Jucer project"),
-      projectRoot (Ids::JUCERPROJECT)
+      projectRoot (Ids::JUCERPROJECT),
+      isSaving (false)
 {
     Logger::writeToLog ("Loading project: " + f.getFullPathName());
     setFile (f);
@@ -255,7 +256,7 @@ static void registerRecentFile (const File& file)
 //==============================================================================
 Result Project::loadDocument (const File& file)
 {
-    ScopedPointer <XmlElement> xml (XmlDocument::parse (file));
+    ScopedPointer<XmlElement> xml (XmlDocument::parse (file));
 
     if (xml == nullptr || ! xml->hasTagName (Ids::JUCERPROJECT.toString()))
         return Result::fail ("Not a valid Jucer project!");
@@ -285,11 +286,16 @@ Result Project::saveDocument (const File& file)
 
 Result Project::saveProject (const File& file, bool isCommandLineApp)
 {
+    if (isSaving)
+        return Result::ok();
+
     updateProjectSettings();
     sanitiseConfigFlags();
 
     if (! isCommandLineApp)
         registerRecentFile (file);
+
+    const ScopedValueSetter<bool> vs (isSaving, true, false);
 
     ProjectSaver saver (*this, file);
     return saver.save (! isCommandLineApp);
@@ -586,8 +592,11 @@ bool Project::Item::shouldBeAddedToTargetProject() const    { return isFile(); }
 Value Project::Item::getShouldCompileValue()                { return state.getPropertyAsValue (Ids::compile, getUndoManager()); }
 bool Project::Item::shouldBeCompiled() const                { return state [Ids::compile]; }
 
-Value Project::Item::getShouldAddToResourceValue()          { return state.getPropertyAsValue (Ids::resource, getUndoManager()); }
+Value Project::Item::getShouldAddToBinaryResourcesValue()   { return state.getPropertyAsValue (Ids::resource, getUndoManager()); }
 bool Project::Item::shouldBeAddedToBinaryResources() const  { return state [Ids::resource]; }
+
+Value Project::Item::getShouldAddToXcodeResourcesValue()    { return state.getPropertyAsValue (Ids::xcodeResource, getUndoManager()); }
+bool Project::Item::shouldBeAddedToXcodeResources() const   { return state [Ids::xcodeResource]; }
 
 Value Project::Item::getShouldInhibitWarningsValue()        { return state.getPropertyAsValue (Ids::noWarnings, getUndoManager()); }
 bool Project::Item::shouldInhibitWarnings() const           { return state [Ids::noWarnings]; }
@@ -761,18 +770,36 @@ struct ItemSorterWithGroupsAtStart
     }
 };
 
-void Project::Item::sortAlphabetically (bool keepGroupsAtStart)
+static void sortGroup (ValueTree& state, bool keepGroupsAtStart, UndoManager* undoManager)
 {
     if (keepGroupsAtStart)
     {
         ItemSorterWithGroupsAtStart sorter;
-        state.sort (sorter, getUndoManager(), true);
+        state.sort (sorter, undoManager, true);
     }
     else
     {
         ItemSorter sorter;
-        state.sort (sorter, getUndoManager(), true);
+        state.sort (sorter, undoManager, true);
     }
+}
+
+static bool isGroupSorted (const ValueTree& state, bool keepGroupsAtStart)
+{
+    if (state.getNumChildren() == 0)
+        return false;
+
+    if (state.getNumChildren() == 1)
+        return true;
+
+    ValueTree stateCopy (state.createCopy());
+    sortGroup (stateCopy, keepGroupsAtStart, nullptr);
+    return stateCopy.isEquivalentTo (state);
+}
+
+void Project::Item::sortAlphabetically (bool keepGroupsAtStart)
+{
+    sortGroup (state, keepGroupsAtStart, getUndoManager());
 }
 
 Project::Item Project::Item::getOrCreateSubGroup (const String& name)
@@ -802,7 +829,7 @@ Project::Item Project::Item::addNewSubGroup (const String& name, int insertIndex
     return group;
 }
 
-bool Project::Item::addFile (const File& file, int insertIndex, const bool shouldCompile)
+bool Project::Item::addFileAtIndex (const File& file, int insertIndex, const bool shouldCompile)
 {
     if (file == File::nonexistent || file.isHidden() || file.getFileName().startsWithChar ('.'))
         return false;
@@ -813,9 +840,7 @@ bool Project::Item::addFile (const File& file, int insertIndex, const bool shoul
 
         for (DirectoryIterator iter (file, false, "*", File::findFilesAndDirectories); iter.next();)
             if (! project.getMainGroup().findItemForFile (iter.getFile()).isValid())
-                group.addFile (iter.getFile(), -1, shouldCompile);
-
-        group.sortAlphabetically (false);
+                group.addFileRetainingSortOrder (iter.getFile(), shouldCompile);
     }
     else if (file.existsAsFile())
     {
@@ -830,13 +855,27 @@ bool Project::Item::addFile (const File& file, int insertIndex, const bool shoul
     return true;
 }
 
+bool Project::Item::addFileRetainingSortOrder (const File& file, bool shouldCompile)
+{
+    const bool wasSortedGroupsNotFirst = isGroupSorted (state, false);
+    const bool wasSortedGroupsFirst    = isGroupSorted (state, true);
+
+    if (! addFileAtIndex (file, 0, shouldCompile))
+        return false;
+
+    if (wasSortedGroupsNotFirst || wasSortedGroupsFirst)
+        sortAlphabetically (wasSortedGroupsFirst);
+
+    return true;
+}
+
 void Project::Item::addFileUnchecked (const File& file, int insertIndex, const bool shouldCompile)
 {
     Item item (project, ValueTree (Ids::FILE));
     item.initialiseMissingProperties();
     item.getNameValue() = file.getFileName();
     item.getShouldCompileValue() = shouldCompile && file.hasFileExtension (fileTypesToCompileByDefault);
-    item.getShouldAddToResourceValue() = project.shouldBeAddedToBinaryResourcesByDefault (file);
+    item.getShouldAddToBinaryResourcesValue() = project.shouldBeAddedToBinaryResourcesByDefault (file);
 
     if (canContain (item))
     {
@@ -851,7 +890,7 @@ bool Project::Item::addRelativeFile (const RelativePath& file, int insertIndex, 
     item.initialiseMissingProperties();
     item.getNameValue() = file.getFileName();
     item.getShouldCompileValue() = shouldCompile;
-    item.getShouldAddToResourceValue() = project.shouldBeAddedToBinaryResourcesByDefault (file);
+    item.getShouldAddToBinaryResourcesValue() = project.shouldBeAddedToBinaryResourcesByDefault (file);
 
     if (canContain (item))
     {

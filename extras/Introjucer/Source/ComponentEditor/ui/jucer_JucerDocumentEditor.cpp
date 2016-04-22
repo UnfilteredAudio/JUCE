@@ -24,6 +24,7 @@
 
 #include "../../jucer_Headers.h"
 #include "../../Application/jucer_AppearanceSettings.h"
+#include "../../Application/jucer_GlobalPreferences.h"
 #include "../../Application/jucer_Application.h"
 #include "jucer_JucerDocumentEditor.h"
 #include "jucer_TestComponent.h"
@@ -187,8 +188,8 @@ private:
             : ComponentTextProperty <Component> ("Class name", 128, false, 0, doc)
         {}
 
-        void setText (const String& newText)    { document.setClassName (newText); }
-        String getText() const                  { return document.getClassName(); }
+        void setText (const String& newText) override    { document.setClassName (newText); }
+        String getText() const override                  { return document.getClassName(); }
     };
 
     //==============================================================================
@@ -199,8 +200,8 @@ private:
             : ComponentTextProperty <Component> ("Component name", 200, false, 0, doc)
         {}
 
-        void setText (const String& newText)    { document.setComponentName (newText); }
-        String getText() const                  { return document.getComponentName(); }
+        void setText (const String& newText) override    { document.setComponentName (newText); }
+        String getText() const override                  { return document.getComponentName(); }
     };
 
     //==============================================================================
@@ -211,8 +212,8 @@ private:
             : ComponentTextProperty <Component> ("Parent classes", 512, false, 0, doc)
         {}
 
-        void setText (const String& newText)    { document.setParentClasses (newText); }
-        String getText() const                  { return document.getParentClassString(); }
+        void setText (const String& newText) override    { document.setParentClasses (newText); }
+        String getText() const override                  { return document.getParentClassString(); }
     };
 
     //==============================================================================
@@ -223,8 +224,8 @@ private:
             : ComponentTextProperty <Component> ("Constructor params", 2048, false, 0, doc)
         {}
 
-        void setText (const String& newText)    { document.setConstructorParams (newText); }
-        String getText() const                  { return document.getConstructorParams(); }
+        void setText (const String& newText) override    { document.setConstructorParams (newText); }
+        String getText() const override                  { return document.getConstructorParams(); }
     };
 
     //==============================================================================
@@ -237,8 +238,8 @@ private:
             preferredHeight = 24 * 3;
         }
 
-        void setText (const String& newText)    { document.setVariableInitialisers (newText); }
-        String getText() const                  { return document.getVariableInitialisers(); }
+        void setText (const String& newText) override    { document.setVariableInitialisers (newText); }
+        String getText() const override                  { return document.getVariableInitialisers(); }
     };
 
 
@@ -253,7 +254,7 @@ private:
               isWidth (isWidth_)
         {}
 
-        void setText (const String& newText)
+        void setText (const String& newText) override
         {
             if (isWidth)
                 document.setInitialSize  (newText.getIntValue(), document.getInitialHeight());
@@ -261,7 +262,7 @@ private:
                 document.setInitialSize  (document.getInitialWidth(), newText.getIntValue());
         }
 
-        String getText() const
+        String getText() const override
         {
             return String (isWidth ? document.getInitialWidth()
                                    : document.getInitialHeight());
@@ -294,13 +295,18 @@ private:
             : ComponentTextProperty <Component> ("Template file", 2048, false, 0, doc)
         {}
 
-        void setText (const String& newText)    { document.setTemplateFile (newText); }
-        String getText() const                  { return document.getTemplateFile(); }
+        void setText (const String& newText) override    { document.setTemplateFile (newText); }
+        String getText() const override                  { return document.getTemplateFile(); }
     };
 };
 
 static const Colour tabColour (Colour (0xff888888));
 
+static SourceCodeEditor* createCodeEditor (const File& file, SourceCodeDocument& sourceCodeDoc)
+{
+    return new SourceCodeEditor (&sourceCodeDoc,
+                                 new CppCodeEditorComponent (file, sourceCodeDoc.getCodeDocument()));
+}
 
 //==============================================================================
 JucerDocumentEditor::JucerDocumentEditor (JucerDocument* const doc)
@@ -329,11 +335,8 @@ JucerDocumentEditor::JucerDocumentEditor (JucerDocument* const doc)
 
         tabbedComponent.addTab ("Resources", tabColour, new ResourceEditorPanel (*document), true);
 
-        SourceCodeEditor* codeEditor = new SourceCodeEditor (&document->getCppDocument(),
-                                                             new CppCodeEditorComponent (document->getCppFile(),
-                                                                                         document->getCppDocument().getCodeDocument()));
-
-        tabbedComponent.addTab ("Code", tabColour, codeEditor, true);
+        tabbedComponent.addTab ("Code", tabColour, createCodeEditor (document->getCppFile(),
+                                                                     document->getCppDocument()), true);
 
         updateTabs();
 
@@ -357,14 +360,14 @@ void JucerDocumentEditor::refreshPropertiesPanel() const
 {
     for (int i = tabbedComponent.getNumTabs(); --i >= 0;)
     {
-        if (ComponentLayoutPanel* layoutPanel = dynamic_cast <ComponentLayoutPanel*> (tabbedComponent.getTabContentComponent (i)))
+        if (ComponentLayoutPanel* layoutPanel = dynamic_cast<ComponentLayoutPanel*> (tabbedComponent.getTabContentComponent (i)))
         {
             if (layoutPanel->isVisible())
                 layoutPanel->updatePropertiesList();
         }
         else
         {
-            if (PaintRoutinePanel* pr = dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)))
+            if (PaintRoutinePanel* pr = dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)))
                 if (pr->isVisible())
                     pr->updatePropertiesList();
         }
@@ -377,7 +380,7 @@ void JucerDocumentEditor::updateTabs()
 
     for (int i = tabbedComponent.getNumTabs(); --i >= 0;)
     {
-        if (dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)) != 0
+        if (dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)) != 0
              && ! paintRoutineNames.contains (tabbedComponent.getTabNames() [i]))
         {
             tabbedComponent.removeTab (i);
@@ -391,7 +394,7 @@ void JucerDocumentEditor::updateTabs()
             int index, numPaintRoutinesSeen = 0;
             for (index = 1; index < tabbedComponent.getNumTabs(); ++index)
             {
-                if (dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (index)) != nullptr)
+                if (dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (index)) != nullptr)
                 {
                     if (++numPaintRoutinesSeen == i)
                     {
@@ -437,7 +440,7 @@ ApplicationCommandTarget* JucerDocumentEditor::getNextCommandTarget()
 
 ComponentLayout* JucerDocumentEditor::getCurrentLayout() const
 {
-    if (ComponentLayoutPanel* panel = dynamic_cast <ComponentLayoutPanel*> (tabbedComponent.getCurrentContentComponent()))
+    if (ComponentLayoutPanel* panel = dynamic_cast<ComponentLayoutPanel*> (tabbedComponent.getCurrentContentComponent()))
         return &(panel->layout);
 
     return nullptr;
@@ -445,7 +448,7 @@ ComponentLayout* JucerDocumentEditor::getCurrentLayout() const
 
 PaintRoutine* JucerDocumentEditor::getCurrentPaintRoutine() const
 {
-    if (PaintRoutinePanel* panel = dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getCurrentContentComponent()))
+    if (PaintRoutinePanel* panel = dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getCurrentContentComponent()))
         return &(panel->getPaintRoutine());
 
     return nullptr;
@@ -457,7 +460,7 @@ void JucerDocumentEditor::showLayout()
     {
         for (int i = 0; i < tabbedComponent.getNumTabs(); ++i)
         {
-            if (dynamic_cast <ComponentLayoutPanel*> (tabbedComponent.getTabContentComponent (i)) != nullptr)
+            if (dynamic_cast<ComponentLayoutPanel*> (tabbedComponent.getTabContentComponent (i)) != nullptr)
             {
                 tabbedComponent.setCurrentTabIndex (i);
                 break;
@@ -472,7 +475,7 @@ void JucerDocumentEditor::showGraphics (PaintRoutine* routine)
     {
         for (int i = 0; i < tabbedComponent.getNumTabs(); ++i)
         {
-            if (PaintRoutinePanel* pr = dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)))
+            if (PaintRoutinePanel* pr = dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getTabContentComponent (i)))
             {
                 if (routine == &(pr->getPaintRoutine()) || routine == nullptr)
                 {
@@ -503,13 +506,13 @@ void JucerDocumentEditor::setZoom (double scale)
 {
     scale = jlimit (1.0 / 4.0, 32.0, scale);
 
-    if (EditingPanelBase* panel = dynamic_cast <EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
+    if (EditingPanelBase* panel = dynamic_cast<EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
         panel->setZoom (scale);
 }
 
 double JucerDocumentEditor::getZoom() const
 {
-    if (EditingPanelBase* panel = dynamic_cast <EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
+    if (EditingPanelBase* panel = dynamic_cast<EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
         return panel->getZoom();
 
     return 1.0;
@@ -525,7 +528,7 @@ static double snapToIntegerZoom (double zoom)
 
 void JucerDocumentEditor::addElement (const int index)
 {
-    if (PaintRoutinePanel* const panel = dynamic_cast <PaintRoutinePanel*> (tabbedComponent.getCurrentContentComponent()))
+    if (PaintRoutinePanel* const panel = dynamic_cast<PaintRoutinePanel*> (tabbedComponent.getCurrentContentComponent()))
     {
         PaintRoutine* const currentPaintRoutine = & (panel->getPaintRoutine());
         const Rectangle<int> area (panel->getComponentArea());
@@ -563,7 +566,7 @@ void JucerDocumentEditor::addComponent (const int index)
 {
     showLayout();
 
-    if (ComponentLayoutPanel* const panel = dynamic_cast <ComponentLayoutPanel*> (tabbedComponent.getCurrentContentComponent()))
+    if (ComponentLayoutPanel* const panel = dynamic_cast<ComponentLayoutPanel*> (tabbedComponent.getCurrentContentComponent()))
     {
         const Rectangle<int> area (panel->getComponentArea());
 
@@ -931,7 +934,7 @@ bool JucerDocumentEditor::perform (const InvocationInfo& info)
         case JucerCommandIDs::zoomNormal:  setZoom (1.0); break;
 
         case JucerCommandIDs::spaceBarDrag:
-            if (EditingPanelBase* panel = dynamic_cast <EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
+            if (EditingPanelBase* panel = dynamic_cast<EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
                 panel->dragKeyHeldDown (info.isKeyDown);
 
             break;
@@ -955,7 +958,7 @@ bool JucerDocumentEditor::perform (const InvocationInfo& info)
             break;
 
         case JucerCommandIDs::bringBackLostItems:
-            if (EditingPanelBase* panel = dynamic_cast <EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
+            if (EditingPanelBase* panel = dynamic_cast<EditingPanelBase*> (tabbedComponent.getCurrentContentComponent()))
             {
                 int w = panel->getComponentArea().getWidth();
                 int h = panel->getComponentArea().getHeight();
@@ -1087,7 +1090,7 @@ JucerDocumentEditor* JucerDocumentEditor::getActiveDocumentHolder()
     ApplicationCommandInfo info (0);
     ApplicationCommandTarget* target = IntrojucerApp::getCommandManager().getTargetForCommand (JucerCommandIDs::editCompLayout, info);
 
-    return dynamic_cast <JucerDocumentEditor*> (target);
+    return dynamic_cast<JucerDocumentEditor*> (target);
 }
 
 Image JucerDocumentEditor::createComponentLayerSnapshot() const
